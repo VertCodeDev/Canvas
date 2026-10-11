@@ -603,6 +603,30 @@ public class WorldConfig extends Part {
         public boolean disableSignals = false;
     }
 
+    public Players players = new Players();
+    public static class Players extends Part {
+
+        {
+            option("maxVisible")
+                .docs(
+                    Style.wrap(
+                        "The maximum amount of other players each player is shown in this world, keeping the nearest ones.",
+                        "Use -1 to disable. Useful for hubs, where sending every player to every other player costs a lot",
+                        "of packets and client frame rate. This only limits players, and never shows a player that would",
+                        "not be shown without it, like a hidden player or a spectator."
+                    )
+                    .blank()
+                    .wordWrap(
+                        "Players with the \"canvas.players.max-visible.bypass\" permission are shown everybody, and players",
+                        "with the \"canvas.players.max-visible.exempt\" permission are shown to everybody without counting",
+                        "towards this amount. Neither is given to operators by default."
+                    )
+                ).greaterThanOrEqualTo(-1.0F);
+        }
+
+        public int maxVisible = -1;
+    }
+
     public Sleeping sleeping = new Sleeping();
 
     @SuppressWarnings("FieldMayBeFinal")
