@@ -399,6 +399,35 @@ public class GlobalConfiguration extends Part {
         }
 
         public boolean preventExcessiveVelocityMoveOutOfRegion = false;
+
+        {
+            option("tickHistory")
+                .docs(
+                    Style.wrap(
+                        "Every region keeps the timings of its recent ticks in five rolling windows (5s, 15s, 1m, 5m and 15m) for",
+                        "the TPS, MSPT and utilisation readouts. The two longest windows are about 94% of that memory, roughly",
+                        "1.1MB per region at 20 TPS, which adds up on servers with hundreds of regions."
+                    )
+                    .blank()
+                    .wordWrap(
+                        "A window that is not kept is not allocated or recorded. Anything that asks for it, like \"/tps\",",
+                        "the region TPS bar, the API or spark, is answered from the longest window that is kept instead.",
+                        "Changing these requires a restart"
+                    )
+                );
+        }
+
+        public TickHistory tickHistory = new TickHistory();
+        public static class TickHistory extends Part {
+
+            {
+                option("keepFiveMinutes").docs("Whether regions keep the 5 minute window, about 6,000 ticks per region");
+                option("keepFifteenMinutes").docs("Whether regions keep the 15 minute window, about 18,000 ticks per region");
+            }
+
+            public boolean keepFiveMinutes = true;
+            public boolean keepFifteenMinutes = true;
+        }
     }
 
     public ChunkSystem chunkSystem = new ChunkSystem();

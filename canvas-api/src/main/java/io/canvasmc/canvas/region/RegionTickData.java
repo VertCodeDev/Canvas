@@ -113,6 +113,9 @@ public interface RegionTickData {
 
     /**
      * Represents a time frame
+     *
+     * <p>The server can be configured to not keep {@link #_5_MINUTES} and {@link #_15_MINUTES}. A frame that is not
+     * kept is answered from the longest frame that is kept, it never fails.</p>
      */
     enum Frame {
         _5_SECONDS,
