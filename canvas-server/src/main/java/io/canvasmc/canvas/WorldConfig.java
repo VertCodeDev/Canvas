@@ -586,6 +586,23 @@ public class WorldConfig extends Part {
     public boolean cactusCheckSurvivalBeforeGrowth = false;
     public boolean enableSuffocationOptimization = false;
 
+    public Redstone redstone = new Redstone();
+    public static class Redstone extends Part {
+
+        {
+            option("disableSignals")
+                .docs(
+                    "Makes redstone do nothing in this world. Every block that asks whether it is powered is told it is not,",
+                    "so hoppers never lock, pistons never extend, dispensers and droppers never fire, lamps never light,",
+                    "wire carries no power, and doors and trapdoors are not opened by power. Levers, buttons and doors can",
+                    "still be clicked, they just power nothing. Blocks that are powered when this is switched on turn off",
+                    "on their next block update"
+                );
+        }
+
+        public boolean disableSignals = false;
+    }
+
     public Sleeping sleeping = new Sleeping();
 
     @SuppressWarnings("FieldMayBeFinal")

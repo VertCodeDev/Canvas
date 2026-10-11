@@ -1,0 +1,10 @@
+--- a/alternate/current/wire/WireHandler.java
++++ b/alternate/current/wire/WireHandler.java
+@@ -689,6 +_,7 @@
+      * components.
+      */
+     private int getExternalPower(WireNode wire) {
++        if (level.signalsDisabled()) return POWER_MIN; // Canvas - per-world option to disable redstone signals - this reads block states directly instead of asking the level
+         int power = POWER_MIN;
+ 
+         for (int iDir = 0; iDir < Directions.ALL.length; iDir++) {
