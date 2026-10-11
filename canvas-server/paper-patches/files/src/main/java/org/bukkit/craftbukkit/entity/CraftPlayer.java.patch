@@ -17,3 +17,17 @@
  
      public boolean canSeePlayer(UUID uuid) {
          org.bukkit.entity.Entity entity = this.getServer().getPlayer(uuid);
+@@ -2535,6 +_,13 @@
+     public void disconnect() {
+         this.conversationTracker.abandonAllConversations();
+         this.perm.clearPermissions();
++        // Canvas start - don't leak disconnected players through their client world border
++        // a virtual border is often shared by many players and outlives them, and the listener registered on it holds this player
++        if (this.clientWorldBorder != null) {
++            this.clientWorldBorder.getHandle().removeListener(this.clientWorldBorderListener);
++            this.clientWorldBorder = null;
++        }
++        // Canvas end - don't leak disconnected players through their client world border
+     }
+ 
+     @Override
