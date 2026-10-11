@@ -1,0 +1,23 @@
+--- a/net/minecraft/network/syncher/EntityDataSerializers.java
++++ b/net/minecraft/network/syncher/EntityDataSerializers.java
+@@ -71,8 +_,19 @@
+         public void encode(final net.minecraft.network.RegistryFriendlyByteBuf buffer, final net.minecraft.world.item.ItemStack value) {
+             // If the codec is called during an obfuscation session, downgrade the context's obf level to OVERSIZED if it isn't already.
+             // Entity data cannot be fully obfuscated as entities might render out specific values (e.g. count or custom name).
++            // Canvas start - don't send the lore of items shown as entities
++            // no entity renders the lore of its item, but every viewer of a dropped item, an item display or an item frame is sent it,
++            // again each time the entity changes, and encoding the text of the lore is most of the cost of sending such an item
++            ItemStack sent = value;
++            final net.minecraft.world.item.component.ItemLore lore;
++            if (io.canvasmc.canvas.GlobalConfiguration.getInstance().networking.stripLoreFromEntityItems && !value.isEmpty()
++                && (lore = value.get(net.minecraft.core.component.DataComponents.LORE)) != null && !lore.lines().isEmpty()) {
++                sent = value.copy();
++                sent.set(net.minecraft.core.component.DataComponents.LORE, net.minecraft.world.item.component.ItemLore.EMPTY);
++            }
++            // Canvas end - don't send the lore of items shown as entities
+             try (final io.papermc.paper.util.SafeAutoClosable ignored = io.papermc.paper.util.sanitizer.ItemObfuscationSession.withContext(c -> c.level(io.papermc.paper.util.sanitizer.ItemObfuscationSession.ObfuscationLevel.OVERSIZED))) {
+-                ItemStack.OPTIONAL_STREAM_CODEC.encode(buffer, value);
++                ItemStack.OPTIONAL_STREAM_CODEC.encode(buffer, sent); // Canvas - don't send the lore of items shown as entities
+             }
+         }
+     };
