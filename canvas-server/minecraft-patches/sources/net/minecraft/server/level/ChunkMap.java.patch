@@ -64,7 +64,7 @@
 +                }
 +                if (visibleToPlayer && this.entity instanceof ServerPlayer target) {
 +                    final int maxVisible = level.canvasConfig().players.maxVisible;
-+                    if (maxVisible > 0 && !io.canvasmc.canvas.world.VisiblePlayers.allows(player, target, maxVisible)) {
++                    if ((maxVisible > 0 || io.canvasmc.canvas.entity.PlayerVisibilityCap.getViewerLimit() != null) && !io.canvasmc.canvas.world.VisiblePlayers.allows(player, target, maxVisible)) {
 +                        visibleToPlayer = false;
 +                    }
 +                }

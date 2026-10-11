@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.BiPredicate;
+import java.util.function.ToIntFunction;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -44,6 +45,8 @@ public final class VisiblePlayers {
 
     // the last pair exemption predicate that threw, so each one is only logged once
     private static volatile @Nullable Object failedPairExemption;
+    // the same for the viewer limit function
+    private static volatile @Nullable Object failedViewerLimit;
 
     static {
         // both are only for players they are given to explicitly, operators included
@@ -57,6 +60,8 @@ public final class VisiblePlayers {
     private boolean unlimited;
     private int computedTick;
     private int computedMax;
+    // what the viewer is capped at, the lower of the world cap and their own limit
+    private int limit;
 
     private VisiblePlayers() {
     }
@@ -78,7 +83,8 @@ public final class VisiblePlayers {
      * @param target
      *     the other player
      * @param max
-     *     the value of {@code players.max-visible} in their world, greater than 0
+     *     the value of {@code players.max-visible} in their world, which is not above 0 when only a viewer limit
+     *     function made the tracker ask
      *
      * @return {@code false} if the target is capped out for the viewer
      */
@@ -104,7 +110,7 @@ public final class VisiblePlayers {
         // below the cap there is nothing to rank, so a player that comes into range is shown at once like without the
         // cap. This is also what shows the players around a viewer that just joined, whose chunks were not sent yet
         // when the first recompute ran
-        if (visible.counted < max && !isCarried(target)) {
+        if (visible.counted < visible.limit && !isCarried(target)) {
             visible.shown.add(target.getId());
             visible.counted++;
             return true;
@@ -126,8 +132,17 @@ public final class VisiblePlayers {
         final RegionizedWorldData worldData = TickRegionScheduler.getCurrentRegionizedWorldData();
 
         // without a region ticking the world of the viewer there is no list of players we own, so don't cap until there is one
-        this.unlimited = worldData == null || worldData.world != viewer.level()
-            || viewer.getBukkitEntity().hasPermission(PlayerVisibilityCap.BYPASS_PERMISSION);
+        final int own = ownLimit(viewer);
+        final boolean capped = max > 0 && !viewer.getBukkitEntity().hasPermission(PlayerVisibilityCap.BYPASS_PERMISSION);
+
+        // a limit of their own is the choice of the viewer, so the bypass permission only lifts the cap of the world
+        if (own >= 0) {
+            this.limit = capped ? Math.min(max, own) : own;
+        } else {
+            this.limit = capped ? max : -1;
+        }
+
+        this.unlimited = this.limit < 0 || worldData == null || worldData.world != viewer.level();
 
         if (this.unlimited) {
             this.shown = new IntOpenHashSet();
@@ -180,7 +195,7 @@ public final class VisiblePlayers {
             ranked.add(new Candidate(target, distanceSquared));
         }
 
-        if (ranked.size() > max) {
+        if (ranked.size() > this.limit) {
             ranked.sort(NEAREST_FIRST);
         }
 
@@ -189,7 +204,7 @@ public final class VisiblePlayers {
         for (int i = 0, len = ranked.size(); i < len; ++i) {
             final ServerPlayer target = ranked.get(i).player();
 
-            if (i < max || isPairExempt(pairExemption, viewer, target)) {
+            if (i < this.limit || isPairExempt(pairExemption, viewer, target)) {
                 next.add(target.getId());
             }
         }
@@ -201,7 +216,28 @@ public final class VisiblePlayers {
         }
 
         this.shown = next;
-        this.counted = Math.min(ranked.size(), max);
+        this.counted = Math.min(ranked.size(), this.limit);
+    }
+
+    // the limit a plugin gives this viewer alone, negative for none
+    private static int ownLimit(final ServerPlayer viewer) {
+        final ToIntFunction<Player> viewerLimit = PlayerVisibilityCap.getViewerLimit();
+
+        if (viewerLimit == null) {
+            return -1;
+        }
+
+        try {
+            return viewerLimit.applyAsInt(viewer.getBukkitEntity());
+        } catch (final Throwable thrown) {
+            // plugin code must not be able to break tracking
+            if (failedViewerLimit != viewerLimit) {
+                failedViewerLimit = viewerLimit;
+                GlobalConfiguration.LOGGER.error("The viewer limit of the max visible players cap threw, treating its viewers as having no limit of their own. This is only logged once", thrown);
+            }
+
+            return -1;
+        }
     }
 
     private static boolean isPairExempt(final @Nullable BiPredicate<Player, Player> pairExemption, final ServerPlayer viewer, final ServerPlayer target) {

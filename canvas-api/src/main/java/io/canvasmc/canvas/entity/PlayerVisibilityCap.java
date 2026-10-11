@@ -1,6 +1,7 @@
 package io.canvasmc.canvas.entity;
 
 import java.util.function.BiPredicate;
+import java.util.function.ToIntFunction;
 import org.bukkit.entity.Player;
 import org.jspecify.annotations.Nullable;
 
@@ -25,6 +26,7 @@ public final class PlayerVisibilityCap {
     public static final String EXEMPT_PERMISSION = "canvas.players.max-visible.exempt";
 
     private static volatile @Nullable BiPredicate<Player, Player> pairExemption;
+    private static volatile @Nullable ToIntFunction<Player> viewerLimit;
 
     private PlayerVisibilityCap() {
     }
@@ -57,5 +59,39 @@ public final class PlayerVisibilityCap {
      */
     public static @Nullable BiPredicate<Player, Player> getPairExemption() {
         return pairExemption;
+    }
+
+    /**
+     * Sets the function that gives single viewers a limit of their own, like a player that switched other players off
+     * in a hub. It answers how many other players the viewer is shown at most, {@code 0} for none, or a negative number
+     * for a viewer without a limit of their own.
+     * <p>
+     * A limit of their own applies in every world, also in worlds without {@code players.max-visible}, and it is not
+     * lifted by {@link #BYPASS_PERMISSION} since it is the choice of the viewer. Where the world has a cap too, the
+     * lower of the two applies. Players accepted by the pair exemption and players with {@link #EXEMPT_PERMISSION} are
+     * still shown.
+     * <p>
+     * The function is called on tick region threads, by several of them at once, about once a second for every player
+     * on the server. It must be fast and thread-safe, and it may only read the player it is given, which is owned by
+     * the calling region. A function that throws is logged once and treated as giving no limit.
+     * <p>
+     * There is one function for the whole server. Set it back to {@code null} when the plugin that set it is disabled.
+     *
+     * @param limit
+     *     gives the limit of a viewer, or {@code null} to remove the current function
+     */
+    public static void setViewerLimit(final @Nullable ToIntFunction<Player> limit) {
+        viewerLimit = limit;
+    }
+
+    /**
+     * Gets the function that gives single viewers a limit of their own
+     *
+     * @return the current function, or {@code null} if none is set
+     *
+     * @see #setViewerLimit(ToIntFunction)
+     */
+    public static @Nullable ToIntFunction<Player> getViewerLimit() {
+        return viewerLimit;
     }
 }
