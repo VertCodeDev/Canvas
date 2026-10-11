@@ -109,7 +109,7 @@ public class CanvasVersionFetcher implements VersionFetcher {
             builder.append(text(buildInfo.buildNumber().getAsInt(), SECONDARY));
             builder.append(text(" [", HEADER));
 
-            String url = "https://github.com/CraftCanvasMC/Canvas/";
+            String url = "https://github.com/VertCodeDev/Canvas/";
             String commit = buildInfo.gitCommit().orElse("Unknown Commit");
 
             if (buildInfo.gitCommit().isPresent()) {
