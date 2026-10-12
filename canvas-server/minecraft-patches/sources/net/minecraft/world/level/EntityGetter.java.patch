@@ -1,5 +1,20 @@
 --- a/net/minecraft/world/level/EntityGetter.java
 +++ b/net/minecraft/world/level/EntityGetter.java
+@@ -62,6 +_,14 @@
+                 continue;
+             }
+ 
++            // Canvas start - a player hidden from the one who places does not stand in the way
++            // somebody a plugin hid, a vanished staff member for one, would otherwise refuse the block without a word of why
++            if (source instanceof net.minecraft.server.level.ServerPlayer placer && otherEntity instanceof net.minecraft.server.level.ServerPlayer hidden
++                && !placer.getBukkitEntity().canSee(hidden.getBukkitEntity())) {
++                continue;
++            }
++            // Canvas end - a player hidden from the one who places does not stand in the way
++
+             if (singleAABB == null) {
+                 final AABB entityBB = otherEntity.getBoundingBox();
+                 if (ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.isEmpty(entityBB) || !ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersectNoEmpty(shape, entityBB)) {
 @@ -186,6 +_,93 @@
          return false;
      }
