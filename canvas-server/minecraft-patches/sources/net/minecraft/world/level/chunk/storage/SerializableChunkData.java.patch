@@ -89,12 +89,13 @@
      public static SerializableChunkData parse(
          final LevelHeightAccessor levelHeight, final PalettedContainerFactory containerFactory, final CompoundTag chunkData
      ) {
-@@ -193,6 +_,8 @@
+@@ -193,6 +_,9 @@
          List<SerializableChunkData.SectionData> sectionData = new ArrayList<>(sectionTags.size());
          Codec<PalettedContainer<Holder<Biome>>> biomesCodec = containerFactory.biomeContainerRWCodec(); // CraftBukkit - read/write
          Codec<PalettedContainer<BlockState>> blockStatesCodec = containerFactory.blockStatesContainerCodec();
 +        final Registry<Biome> biomeRegistry = serverLevel.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BIOME); // Canvas - read section palettes without codecs
 +        final java.util.function.Function<net.minecraft.nbt.Tag, @Nullable Holder<Biome>> biomeReader = entry -> readHolder(biomeRegistry, entry); // Canvas - read section palettes without codecs
++        final boolean readDirectly = io.canvasmc.canvas.GlobalConfiguration.getInstance().chunkSystem.readSectionPalettesWithoutCodecs; // Canvas - read section palettes without codecs
  
          for (int i = 0; i < sectionTags.size(); i++) {
              Optional<CompoundTag> maybeSectionTag = sectionTags.getCompound(i);
@@ -110,7 +111,7 @@
 -                                .promotePartial(msg -> logErrors(chunkPos, y, msg))
 -                                .getOrThrow(SerializableChunkData.ChunkReadException::new)
 +                            container -> {
-+                                final PalettedContainer<BlockState> read = readContainer(container, containerFactory.blockStatesStrategy(), containerFactory.defaultBlockState(), presetBlockStates, SerializableChunkData::readBlockState); // Canvas - read section palettes without codecs
++                                final PalettedContainer<BlockState> read = !readDirectly ? null : readContainer(container, containerFactory.blockStatesStrategy(), containerFactory.defaultBlockState(), presetBlockStates, SerializableChunkData::readBlockState); // Canvas - read section palettes without codecs
 +                                return read != null ? read : antiXrayBlockStateCodec.parse(NbtOps.INSTANCE, container) // Paper - Anti-Xray // Canvas - read section palettes without codecs
 +                                    .promotePartial(msg -> logErrors(chunkPos, y, msg))
 +                                    .getOrThrow(SerializableChunkData.ChunkReadException::new);
@@ -123,7 +124,7 @@
 -                                .promotePartial(msg -> logErrors(chunkPos, y, msg))
 -                                .getOrThrow(SerializableChunkData.ChunkReadException::new)
 +                            container -> {
-+                                final PalettedContainer<Holder<Biome>> read = readContainer(container, containerFactory.biomeStrategy(), containerFactory.defaultBiome(), null, biomeReader); // Canvas - read section palettes without codecs
++                                final PalettedContainer<Holder<Biome>> read = !readDirectly ? null : readContainer(container, containerFactory.biomeStrategy(), containerFactory.defaultBiome(), null, biomeReader); // Canvas - read section palettes without codecs
 +                                return read != null ? read : biomesCodec.parse(NbtOps.INSTANCE, container) // Canvas - read section palettes without codecs
 +                                    .promotePartial(msg -> logErrors(chunkPos, y, msg))
 +                                    .getOrThrow(SerializableChunkData.ChunkReadException::new);

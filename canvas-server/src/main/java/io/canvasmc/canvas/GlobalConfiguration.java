@@ -467,6 +467,18 @@ public class GlobalConfiguration extends Part {
         }
 
         public boolean optimizeTreasureMapLocating = false;
+
+        {
+            option("readSectionPalettesWithoutCodecs")
+                .docs(
+                    "Reads the block and biome palettes of a chunk section straight from its saved data when a chunk is",
+                    "loaded, instead of through the codecs, which build far more temporary objects for the same result.",
+                    "A section this reader does not understand is still read the usual way.",
+                    "Can be changed with \"/canvas reload\" and applies to chunks loaded after that"
+                );
+        }
+
+        public boolean readSectionPalettesWithoutCodecs = false;
     }
 
     // TODO - check these on minecraft updates
