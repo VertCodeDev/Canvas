@@ -552,6 +552,14 @@ public class GlobalConfiguration extends Part {
             option("flushLocationWhileKnockback")
                 .docs("Derived from Leaf, this synchronizes the player immediately when knocked back");
 
+            option("consolidateFlushesOutsideReads")
+                .docs(
+                    "Holds back a flush that arrives while nothing is being read from the connection and merges it with the",
+                    "ones after it, instead of only merging the flushes that arrive during a read. A server sends most of",
+                    "its packets on its own, so this is where most flushes are, and each one saved is a system call saved.",
+                    "Can be changed with \"/canvas reload\" and applies to connections that are already open"
+                );
+
             option("stripLoreFromEntityItems")
                 .docs(
                     "Leaves the lore out of items that are sent as part of an entity: dropped items, item displays, item",
@@ -563,6 +571,7 @@ public class GlobalConfiguration extends Part {
 
         public boolean filterVelocityPacket = false;
         public boolean stripLoreFromEntityItems = false;
+        public boolean consolidateFlushesOutsideReads = true;
         public boolean alternativePlayerListTick = false;
         public int playerInfoSendInterval = 600;
         public boolean purpurAlternativeKeepalive = false;
