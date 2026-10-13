@@ -250,3 +250,11 @@
      // Folia & Canvas end - region threading
      public @Nullable Entity teleport(TeleportTransition transition) { // Paper - remove param final
          // Folia start - region threading
+@@ -5905,6 +_,7 @@
+ 
+     public void placePortalTicket(final BlockPos ticketPosition) {
+         if (this.level() instanceof ServerLevel serverLevel) {
++            if (!(this instanceof Player) && this.countPlayerPassengers() <= 0 && serverLevel.moonrise$getNearbyPlayers().getPlayers(ticketPosition, ca.spottedleaf.moonrise.common.misc.NearbyPlayers.NearbyMapType.VIEW_DISTANCE) == null) return; // Canvas - only keep portal destinations loaded for players or where a player is in view
+             serverLevel.getChunkSource().addTicketWithRadius(TicketType.PORTAL, ChunkPos.containing(ticketPosition), 3);
+         }
+     }
