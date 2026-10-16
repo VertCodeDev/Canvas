@@ -45,6 +45,7 @@ public class CanvasVersionFetcher implements VersionFetcher {
     private static final TextColor LIST = TextColor.color(122, 32, 10);
 
     private static final AtomicBoolean USE_CACHE = new AtomicBoolean(true);
+    private static final String FORK_BRANCH_PREFIX = "colorgens/";
 
     @Override
     public long getCacheTime() {
@@ -211,6 +212,12 @@ public class CanvasVersionFetcher implements VersionFetcher {
             return new LocalStatus();
         }
 
+        // ColorGens fork builds are numbered by our own branch and never published to CanvasMC's
+        // API, so comparing them there can only fail; they say whose build they are instead.
+        if (buildInfo.gitBranch().map(branch -> branch.startsWith(FORK_BRANCH_PREFIX)).orElse(false)) {
+            return new ForkStatus();
+        }
+
         final int localNum = buildNumber.getAsInt();
         try {
             ClientV2.Build build = Util.CANVAS_CLIENT.getLatestBuild(buildInfo.minecraftVersionId(), true);
@@ -260,6 +267,20 @@ public class CanvasVersionFetcher implements VersionFetcher {
         @Override
         public boolean isError() {
             return true;
+        }
+    }
+
+    private static class ForkStatus implements Status {
+        @Contract(value = " -> new", pure = true)
+        @Override
+        public Component getStatus() {
+            return text("COLORGENS", GREEN, TextDecoration.BOLD)
+                .hoverEvent(HoverEvent.showText(text("A ColorGens build of Canvas, not checked against CanvasMC's builds", GREEN)));
+        }
+
+        @Override
+        public boolean isError() {
+            return false;
         }
     }
 
