@@ -1,6 +1,6 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Dueris <duerismc@gmail.com>
-Date: Mon, 5 Oct 2026 09:33:41 -0700
+Date: Tue, 13 Oct 2026 11:20:14 -0700
 Subject: [PATCH] Region Threading
 
 This patch and its contents is comprised of the following:
@@ -5318,10 +5318,10 @@ index 0000000000000000000000000000000000000000..7494f93bcc79931720e55a2ffcaab2a9
 +import org.jspecify.annotations.NullMarked;
 diff --git a/io/canvasmc/canvas/threadedregions/world/scores/ObjectiveData.java b/io/canvasmc/canvas/threadedregions/world/scores/ObjectiveData.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..ad6cd3b4d150f5e6a485f407ef56528d993dc283
+index 0000000000000000000000000000000000000000..2cca40cf86aa696261a7129b962f6d11c6c803a6
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/world/scores/ObjectiveData.java
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,105 @@
 +package io.canvasmc.canvas.threadedregions.world.scores;
 +
 +import java.util.Optional;
@@ -5334,34 +5334,46 @@ index 0000000000000000000000000000000000000000..ad6cd3b4d150f5e6a485f407ef56528d
 +
 +@SuppressWarnings("UnusedReturnValue")
 +public class ObjectiveData {
++
++    @Nullable
 +    private Component formattedDisplayName;
++
 +    private ObjectiveCriteria.RenderType renderType;
 +    private boolean displayAutoUpdate;
-+    private @Nullable NumberFormat numberFormat;
++
 +    private Component displayName;
++    private final Objective objective;
++
++    @Nullable
++    private NumberFormat numberFormat;
 +
 +    public ObjectiveData(
++        @Nullable
 +        final Component formattedDisplayName,
 +        final ObjectiveCriteria.RenderType renderType,
 +        final boolean displayAutoUpdate,
-+        final @Nullable NumberFormat numberFormat,
-+        final Component displayName
++        @Nullable
++        final NumberFormat numberFormat,
++        final Component displayName,
++        final Objective objective
 +    ) {
 +        this.formattedDisplayName = formattedDisplayName;
 +        this.renderType = renderType;
 +        this.displayAutoUpdate = displayAutoUpdate;
 +        this.numberFormat = numberFormat;
 +        this.displayName = displayName;
++        this.objective = objective;
 +    }
 +
 +    @Contract("_ -> new")
 +    public static ObjectiveData copyOf(final ObjectiveData toCopy) {
 +        return new ObjectiveData(
-+            toCopy.getFormattedDisplayName(),
++            toCopy.formattedDisplayName,
 +            toCopy.getRenderType(),
 +            toCopy.doesDisplayAutoUpdate(),
 +            toCopy.getNumberFormat(),
-+            toCopy.getDisplayName()
++            toCopy.getDisplayName(),
++            toCopy.objective
 +        );
 +    }
 +
@@ -5375,10 +5387,10 @@ index 0000000000000000000000000000000000000000..ad6cd3b4d150f5e6a485f407ef56528d
 +    }
 +
 +    public Component getFormattedDisplayName() {
-+        return formattedDisplayName;
++        return this.formattedDisplayName != null ? this.formattedDisplayName : (this.formattedDisplayName = this.objective.createFormattedDisplayName(this.displayName));
 +    }
 +
-+    public ObjectiveData setFormattedDisplayName(final Component formattedDisplayName) {
++    public ObjectiveData setFormattedDisplayName(final @Nullable Component formattedDisplayName) {
 +        this.formattedDisplayName = formattedDisplayName;
 +        return this;
 +    }
@@ -19982,7 +19994,7 @@ index 6a79944b040307acef3d1c66bd0dacaba514c708..7e7423f494f71903f9358d1005940090
                          )
                  )
 diff --git a/net/minecraft/server/commands/TeleportCommand.java b/net/minecraft/server/commands/TeleportCommand.java
-index 97acb0c6ff95a04405eeebc9835ddb84f818128d..cf9a58fef80d2b1a7ee988aeba0e2b2124113179 100644
+index 97acb0c6ff95a04405eeebc9835ddb84f818128d..ea8cb0ac55bb7c23de57d1989ffeaf68372ad40f 100644
 --- a/net/minecraft/server/commands/TeleportCommand.java
 +++ b/net/minecraft/server/commands/TeleportCommand.java
 @@ -164,18 +164,7 @@ public class TeleportCommand {
@@ -20015,7 +20027,7 @@ index 97acb0c6ff95a04405eeebc9835ddb84f818128d..cf9a58fef80d2b1a7ee988aeba0e2b21
 +            Float yawFinal = Float.valueOf(newYRot);
 +            Float pitchFinal = Float.valueOf(newXRot);
 +            victim.getBukkitEntity().taskScheduler.scheduleOrExecute((Entity nmsEntity) -> { // Canvas - region threading
-+                nmsEntity.stopRiding();
++                nmsEntity.stopRiding(true);
 +                nmsEntity.teleportAsync(
 +                        level, posFinal, yawFinal, pitchFinal, Vec3.ZERO,
 +                        org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.COMMAND,
@@ -22077,7 +22089,7 @@ index cc6f4e2845ef1e95c765d65f17c8aa1b06652927..7316c756f1c228eef710219a659c7968
                  foundPlayers.add(player);
              }
 diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
-index a2d5a9b453e86c2f89131adf0acd0f752ac0c9a7..beee97a9cf863c9357e519adaa2b02b6a5d73ccf 100644
+index 3b5966e5580a1413d464f3a0dd5eacb6ad28e348..5cb3e37c5b472f14b6d48ffd0daf41039b984ef7 100644
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
 @@ -191,11 +191,11 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
@@ -23264,23 +23276,23 @@ index a2d5a9b453e86c2f89131adf0acd0f752ac0c9a7..beee97a9cf863c9357e519adaa2b02b6
 +                regionizedWorldData = ServerLevel.this.getCurrentWorldData();
 +            regionizedWorldData.removeLoadedEntity(entity);
 +            // Folia & Canvas end - region threading
-             // Spigot start // TODO I don't think this is needed anymore
+             // Spigot start
              if (entity instanceof Player player) {
-                 for (final ServerLevel level : ServerLevel.this.getServer().getAllLevels()) {
+                 SavedDataStorage storage = getServer().getDataStorage();
 @@ -3097,10 +3313,12 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
-                             continue;
-                         }
- 
-+                        synchronized (map) { // Folia - make map data thread-safe
-                         map.carriedByPlayers.remove(player);
-                         if (map.carriedBy.removeIf(holdingPlayer -> holdingPlayer.player == player)) {
-                             map.decorations.remove(player.getName().getString());
-                         }
-+                        } // Folia - make map data thread-safe
+                         continue;
                      }
+ 
++                    synchronized (map) { // Folia - make map data thread-safe
+                     net.minecraft.world.level.saveddata.maps.MapItemSavedData.HoldingPlayer holder = map.carriedByPlayers.remove(player);
+                     if (holder != null && map.carriedBy.remove(holder)) {
+                         map.decorations.remove(player.getName().getString());
+                     }
++                    } // Folia - make map data thread-safe
                  }
              }
-@@ -3132,17 +3350,17 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
+             // Spigot end
+@@ -3131,17 +3349,17 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
                      );
                  }
  
@@ -23301,7 +23313,7 @@ index a2d5a9b453e86c2f89131adf0acd0f752ac0c9a7..beee97a9cf863c9357e519adaa2b02b6
              // CraftBukkit start
              entity.valid = false;
              if (!(entity instanceof ServerPlayer) && entity.getRemovalReason() != net.minecraft.world.entity.Entity.RemovalReason.CHANGED_DIMENSION) {
-@@ -3172,15 +3390,15 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
+@@ -3171,15 +3389,15 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
      private long lagCompensationTick = currentLagCompensationTick();
  
      public long getLagCompensationTick() {
@@ -23321,7 +23333,7 @@ index a2d5a9b453e86c2f89131adf0acd0f752ac0c9a7..beee97a9cf863c9357e519adaa2b02b6
      // Paper end - lag compensation
  }
 diff --git a/net/minecraft/server/level/ServerPlayer.java b/net/minecraft/server/level/ServerPlayer.java
-index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792c0d51608 100644
+index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f0184126731cac802038594d72852dd93519b6b3 100644
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
 @@ -210,7 +210,7 @@ import org.slf4j.Logger;
@@ -23730,7 +23742,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
              }
              final Runnable finalConsumeAnchorCharge = consumeAnchorCharge; // Paper - Fix SPIGOT-5989
  
-@@ -1529,8 +1778,506 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1529,8 +1778,507 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          }
      }
  
@@ -23783,7 +23795,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
 +        }
 +
 +        if (!this.hasNullCallback()) {
-+            this.unRide();
++            this.unRide(true);
 +        }
 +
 +        if (this.isVehicle() || this.isPassenger()) {
@@ -24111,6 +24123,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
 +            // pre-add logic
 +            PlayerList playerlist = this.server.getPlayerList();
 +            net.minecraft.world.level.storage.LevelData worlddata = destination.getLevelData();
++            this.connection.restartClientLoadTimerAfterRespawn(); // Paper - reset client world load status on cross-dimension teleport
 +            this.connection.send(
 +                new ClientboundRespawnPacket(
 +                    this.createCommonSpawnInfo(destination),
@@ -24164,9 +24177,9 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
 +            this.setHealth(this.getHealth());
 +            playerlist.sendAllPlayerInfo(this);
 +            this.onUpdateAbilities();
-+            /*for (MobEffectInstance mobEffect : this.getActiveEffects()) {
++            /* for (MobEffectInstance mobEffect : this.getActiveEffects()) {
 +                this.connection.send(new ClientboundUpdateMobEffectPacket(this.getId(), mobEffect, false));
-+            }*/ // handled by sendActivePlayerEffects
++            } */ // handled by sendActivePlayerEffects
 +
 +            this.lastSentExp = -1;
 +            this.lastSentHealth = -1.0F;
@@ -24237,7 +24250,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
          if (this.isSleeping()) return null; // CraftBukkit - SPIGOT-3154
          if (this.isRemoved()) {
              return null;
-@@ -1625,7 +2372,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1626,7 +2374,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          this.connection.send(new ClientboundPlayerRotationPacket(yRot, relativeY, xRot, relativeX));
      }
  
@@ -24246,7 +24259,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
          ResourceKey<Level> oldKey = oldLevel.dimension();
          ResourceKey<Level> newKey = this.level().dimension();
          // CraftBukkit start
-@@ -1644,7 +2391,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1645,7 +2393,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
  
          if (oldMainDimensionKey == Level.NETHER && newMainDimensionKey == Level.OVERWORLD && this.enteredNetherPosition != null) {
              // CraftBukkit end
@@ -24255,7 +24268,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
          }
  
          if (newMainDimensionKey != Level.NETHER) { // CraftBukkit
-@@ -1653,6 +2400,12 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1654,6 +2402,12 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          this.gameMode.hasDelayedDestroy = false; // Paper
      }
  
@@ -24268,7 +24281,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
      @Override
      public boolean broadcastToPlayer(final ServerPlayer player) {
          return player.isSpectator() ? this.getCamera() == this : !this.isSpectator() && super.broadcastToPlayer(player);
-@@ -1836,7 +2589,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1837,7 +2591,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
  
      @Override
      protected void pushEntities() {
@@ -24277,7 +24290,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
              super.pushEntities();
          }
      }
-@@ -1859,6 +2612,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1860,6 +2614,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
  
      @Override
      public OptionalInt openMenu(final @Nullable MenuProvider provider) {
@@ -24285,7 +24298,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
          if (provider == null) {
              return OptionalInt.empty();
          }
-@@ -1998,6 +2752,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1999,6 +2754,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
      }
      @Override
      public void closeContainer(org.bukkit.event.inventory.InventoryCloseEvent.Reason reason) {
@@ -24293,7 +24306,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
          org.bukkit.craftbukkit.event.CraftEventFactory.handleInventoryCloseEvent(this, reason); // CraftBukkit
          // Paper end - Inventory close reason
          this.connection.send(new ClientboundContainerClosePacket(this.containerMenu.containerId));
-@@ -2587,7 +3342,30 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -2588,7 +3344,30 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          return this.camera == null ? this : this.camera;
      }
  
@@ -24324,7 +24337,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
          Entity oldCamera = this.getCamera();
          this.camera = newCamera == null ? this : newCamera;
          if (oldCamera != this.camera) {
-@@ -2606,16 +3384,21 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -2607,16 +3386,21 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
                  }
              }
              // Paper end - Add PlayerStartSpectatingEntityEvent and PlayerStopSpectatingEntity
@@ -24353,7 +24366,7 @@ index 8df98faa04932fcc296b5f87159cd6d6285f2369..36bea658cac26c95c17d945cd8ee2792
          }
      }
  
-@@ -3164,7 +3947,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -3165,7 +3949,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          this.experienceLevel = this.newLevel;
          this.totalExperience = this.newTotalExp;
          this.experienceProgress = 0;
@@ -24675,10 +24688,10 @@ index 6baa9d2a8af7901d47964e6d7ad53ea7963ceeef..4431bb34a9ca2f91d6e00af0f5baccc5
          });
      }
 diff --git a/net/minecraft/server/network/ServerConnectionListener.java b/net/minecraft/server/network/ServerConnectionListener.java
-index 2f3b58491ef7be8cd2e081f2c44869cd1e50e6a6..32c9ef59f40ffc155db5db15ea0f32b74e9cda8d 100644
+index 42408dede2808447281b49f4006c1d8b03c10bf4..82238881ce06874af8a9c1e4a0581be5088a8a9d 100644
 --- a/net/minecraft/server/network/ServerConnectionListener.java
 +++ b/net/minecraft/server/network/ServerConnectionListener.java
-@@ -128,12 +128,13 @@ public class ServerConnectionListener {
+@@ -129,12 +129,13 @@ public class ServerConnectionListener {
                                          });
                                      }
                                      // Paper end - Add support for proxy protocol
@@ -24693,7 +24706,7 @@ index 2f3b58491ef7be8cd2e081f2c44869cd1e50e6a6..32c9ef59f40ffc155db5db15ea0f32b7
                                  }
                              }
                          )
-@@ -246,7 +247,7 @@ public class ServerConnectionListener {
+@@ -247,7 +248,7 @@ public class ServerConnectionListener {
              this.addPendingConnections();
              // Spigot start
              // This prevents players from 'gaming' the server, and strategically relogging to increase their position in the tick order
@@ -24703,7 +24716,7 @@ index 2f3b58491ef7be8cd2e081f2c44869cd1e50e6a6..32c9ef59f40ffc155db5db15ea0f32b7
              }
              // Spigot end
 diff --git a/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc43009ef462a0 100644
+index efe40685f16b954dc74d35ab818c1a402edeac7c..e7ae3fb70f739049bd754bcb8416bf027026ca5b 100644
 --- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -305,10 +305,10 @@ public class ServerGamePacketListenerImpl
@@ -24882,7 +24895,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
  
              this.player
                  .absSnapTo(
-@@ -945,6 +1023,12 @@ public class ServerGamePacketListenerImpl
+@@ -946,6 +1024,12 @@ public class ServerGamePacketListenerImpl
      @Override
      public void handleSetCommandBlock(final ServerboundSetCommandBlockPacket packet) {
          PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
@@ -24895,7 +24908,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
          if (!this.player.canUseGameMasterBlocks() && (!this.player.isCreative() || !this.player.getBukkitEntity().hasPermission("minecraft.commandblock"))) { // Paper - command block permission
              this.player.sendSystemMessage(Component.translatable("advMode.notAllowed"));
          } else {
-@@ -1006,6 +1090,12 @@ public class ServerGamePacketListenerImpl
+@@ -1007,6 +1091,12 @@ public class ServerGamePacketListenerImpl
      @Override
      public void handleSetCommandMinecart(final ServerboundSetCommandMinecartPacket packet) {
          PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
@@ -24908,7 +24921,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
          if (!this.player.canUseGameMasterBlocks() && (!this.player.isCreative() || !this.player.getBukkitEntity().hasPermission("minecraft.commandblock"))) { // Paper - command block permission
              this.player.sendSystemMessage(Component.translatable("advMode.notAllowed"));
          } else {
-@@ -1179,7 +1269,7 @@ public class ServerGamePacketListenerImpl
+@@ -1180,7 +1270,7 @@ public class ServerGamePacketListenerImpl
      @Override
      public void handleSetStructureBlock(final ServerboundSetStructureBlockPacket packet) {
          PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
@@ -24917,7 +24930,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
              BlockPos blockPos = packet.getPos();
              BlockState state = this.player.level().getBlockState(blockPos);
              if (this.player.level().getBlockEntity(blockPos) instanceof StructureBlockEntity structure) {
-@@ -1232,7 +1322,7 @@ public class ServerGamePacketListenerImpl
+@@ -1233,7 +1323,7 @@ public class ServerGamePacketListenerImpl
      @Override
      public void handleSetTestBlock(final ServerboundSetTestBlockPacket packet) {
          PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
@@ -24926,7 +24939,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
              BlockPos blockPos = packet.position();
              BlockState initialState = this.player.level().getBlockState(blockPos);
              if (this.player.level().getBlockEntity(blockPos) instanceof TestBlockEntity testBlock) {
-@@ -1248,7 +1338,7 @@ public class ServerGamePacketListenerImpl
+@@ -1249,7 +1339,7 @@ public class ServerGamePacketListenerImpl
      public void handleTestInstanceBlockAction(final ServerboundTestInstanceBlockActionPacket packet) {
          PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
          BlockPos pos = packet.pos();
@@ -24935,7 +24948,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
              if (packet.action() != ServerboundTestInstanceBlockActionPacket.Action.QUERY
                  && packet.action() != ServerboundTestInstanceBlockActionPacket.Action.INIT) {
                  blockEntity.set(packet.data());
-@@ -1291,7 +1381,7 @@ public class ServerGamePacketListenerImpl
+@@ -1292,7 +1382,7 @@ public class ServerGamePacketListenerImpl
      @Override
      public void handleSetJigsawBlock(final ServerboundSetJigsawBlockPacket packet) {
          PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
@@ -24944,7 +24957,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
              BlockPos blockPos = packet.getPos();
              BlockState state = this.player.level().getBlockState(blockPos);
              if (this.player.level().getBlockEntity(blockPos) instanceof JigsawBlockEntity jigsaw) {
-@@ -1345,7 +1435,7 @@ public class ServerGamePacketListenerImpl
+@@ -1346,7 +1436,7 @@ public class ServerGamePacketListenerImpl
      public void handleEditBook(final ServerboundEditBookPacket packet) {
          // Paper start - Book size limits
          final io.papermc.paper.configuration.type.number.IntOr.Disabled pageMax = io.papermc.paper.configuration.GlobalConfiguration.get().itemValidation.bookSize.pageMax;
@@ -24953,7 +24966,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
              final List<String> pageList = packet.pages();
              long byteTotal = 0;
              final int maxBookPageSize = pageMax.intValue();
-@@ -1382,11 +1472,11 @@ public class ServerGamePacketListenerImpl
+@@ -1383,11 +1473,11 @@ public class ServerGamePacketListenerImpl
          }
          // Paper end - Book size limits
          // CraftBukkit start
@@ -24967,7 +24980,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
          // CraftBukkit end
          int slot = packet.slot();
          if (Inventory.isHotbarSlot(slot) || slot == 40) {
-@@ -1397,7 +1487,13 @@ public class ServerGamePacketListenerImpl
+@@ -1398,7 +1488,13 @@ public class ServerGamePacketListenerImpl
              Consumer<List<FilteredText>> handler = title.isPresent()
                  ? filteredContents -> this.signBook(filteredContents.get(0), filteredContents.subList(1, filteredContents.size()), slot)
                  : filteredContents -> this.updateBookContents(filteredContents, slot);
@@ -24982,7 +24995,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
          }
      }
  
-@@ -1437,12 +1533,16 @@ public class ServerGamePacketListenerImpl
+@@ -1438,12 +1534,16 @@ public class ServerGamePacketListenerImpl
          if (this.player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
              Entity entity = this.player.level().getEntity(packet.getEntityId());
              if (entity != null) {
@@ -25002,7 +25015,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
              }
          }
      }
-@@ -1461,9 +1561,19 @@ public class ServerGamePacketListenerImpl
+@@ -1462,9 +1562,19 @@ public class ServerGamePacketListenerImpl
      public void handleBlockEntityTagQuery(final ServerboundBlockEntityTagQueryPacket packet) {
          PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
          if (this.player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
@@ -25022,7 +25035,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
          }
      }
  
-@@ -1556,13 +1666,14 @@ public class ServerGamePacketListenerImpl
+@@ -1557,13 +1667,14 @@ public class ServerGamePacketListenerImpl
              } else {
                  boolean isFallFlying = this.player.isFallFlying();
                  ServerLevel level = this.player.level();
@@ -25040,7 +25053,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
  
                      if (deltaPackets > Math.max(this.allowedPlayerTicks, 5)) {
                      // CraftBukkit end - handle custom speeds and skipped ticks
-@@ -1728,7 +1839,23 @@ public class ServerGamePacketListenerImpl
+@@ -1729,7 +1840,23 @@ public class ServerGamePacketListenerImpl
  
                          // If the event is cancelled we move the player back to their old location.
                          if (event.isCancelled()) {
@@ -25065,7 +25078,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                              return;
                          }
  
-@@ -1736,7 +1863,23 @@ public class ServerGamePacketListenerImpl
+@@ -1737,7 +1864,23 @@ public class ServerGamePacketListenerImpl
                          // there to avoid any 'Moved wrongly' or 'Moved too quickly' errors.
                          // We only do this if the Event was not cancelled.
                          if (!oldTo.equals(event.getTo()) && !event.isCancelled()) {
@@ -25090,7 +25103,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                              return;
                          }
  
-@@ -2046,9 +2189,9 @@ public class ServerGamePacketListenerImpl
+@@ -2047,9 +2190,9 @@ public class ServerGamePacketListenerImpl
                      if (!this.player.isSpectator()) {
                          // limit how quickly items can be dropped
                          // If the ticks aren't the same then the count starts from 0 and we update the lastDropTick.
@@ -25102,7 +25115,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                          } else {
                              // Else we increment the drop count and check the amount.
                              this.dropCount++;
-@@ -2080,7 +2223,7 @@ public class ServerGamePacketListenerImpl
+@@ -2081,7 +2224,7 @@ public class ServerGamePacketListenerImpl
                  case ABORT_DESTROY_BLOCK:
                  case STOP_DESTROY_BLOCK:
                      // Paper start - Don't allow digging into unloaded chunks
@@ -25111,7 +25124,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                          this.player.connection.ackBlockChangesUpTo(packet.getSequence());
                          return;
                      }
-@@ -2169,7 +2312,7 @@ public class ServerGamePacketListenerImpl
+@@ -2170,7 +2313,7 @@ public class ServerGamePacketListenerImpl
                  }
                  // Paper end - improve distance check
                  BlockPos pos = blockHit.getBlockPos();
@@ -25120,7 +25133,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                      Vec3 distance = location.subtract(Vec3.atCenterOf(pos));
                      double limit = 1.0000001;
                      if (Math.abs(distance.x()) < 1.0000001 && Math.abs(distance.y()) < 1.0000001 && Math.abs(distance.z()) < 1.0000001) {
-@@ -2309,7 +2452,7 @@ public class ServerGamePacketListenerImpl
+@@ -2310,7 +2453,7 @@ public class ServerGamePacketListenerImpl
              for (ServerLevel level : this.server.getAllLevels()) {
                  Entity entity = packet.getEntity(level);
                  if (entity != null) {
@@ -25129,7 +25142,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                      return;
                  }
              }
-@@ -2339,6 +2482,7 @@ public class ServerGamePacketListenerImpl
+@@ -2340,6 +2483,7 @@ public class ServerGamePacketListenerImpl
          this.removePlayerFromWorld(null);
      }
  
@@ -25137,7 +25150,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
      private void removePlayerFromWorld(net.kyori.adventure.text.@Nullable Component quitMessage) {
          // Paper end - Fix kick event leave message not being sent
          this.chatMessageChain.close();
-@@ -2352,6 +2496,13 @@ public class ServerGamePacketListenerImpl
+@@ -2353,6 +2497,13 @@ public class ServerGamePacketListenerImpl
          this.player.disconnect();
          // Paper start - Adventure
          quitMessage = quitMessage == null ? this.server.getPlayerList().remove(this.player) : this.server.getPlayerList().remove(this.player, quitMessage); // Paper - pass in quitMessage to fix kick message not being used
@@ -25151,7 +25164,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
          if ((quitMessage != null) && !quitMessage.equals(net.kyori.adventure.text.Component.empty())) {
              this.server.getPlayerList().broadcastSystemMessage(PaperAdventure.asVanilla(quitMessage), false);
              // Paper end - Adventure
-@@ -2400,7 +2551,7 @@ public class ServerGamePacketListenerImpl
+@@ -2401,7 +2552,7 @@ public class ServerGamePacketListenerImpl
      public void handleChat(final ServerboundChatPacket packet) {
          // CraftBukkit start - async chat
          // SPIGOT-3638
@@ -25160,7 +25173,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
              return;
          }
          // CraftBukkit end
-@@ -2591,7 +2742,7 @@ public class ServerGamePacketListenerImpl
+@@ -2592,7 +2743,7 @@ public class ServerGamePacketListenerImpl
              this.player.resetLastActionTime();
              // CraftBukkit start
              if (sync) {
@@ -25169,7 +25182,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
              } else {
                  chatHandler.run();
              }
-@@ -2671,6 +2822,7 @@ public class ServerGamePacketListenerImpl
+@@ -2672,6 +2823,7 @@ public class ServerGamePacketListenerImpl
          if (rawMessage.isEmpty()) {
              LOGGER.warn("{} tried to send an empty message", this.player.getScoreboardName());
          } else if (this.getCraftPlayer().isConversing()) {
@@ -25177,7 +25190,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
              final String conversationInput = rawMessage;
              this.server.processQueue.add(() -> ServerGamePacketListenerImpl.this.getCraftPlayer().acceptConversationInput(conversationInput));
          } else if (this.player.getChatVisibility() == ChatVisiblity.SYSTEM) { // Re-add "Command Only" flag check
-@@ -2878,8 +3030,26 @@ public class ServerGamePacketListenerImpl
+@@ -2879,8 +3031,26 @@ public class ServerGamePacketListenerImpl
      // Spigot end
  
      public void switchToConfig() {
@@ -25205,7 +25218,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
          this.send(ClientboundStartConfigurationPacket.INSTANCE);
          this.connection.setupOutboundProtocol(ConfigurationProtocols.CLIENTBOUND);
      }
-@@ -2903,7 +3073,7 @@ public class ServerGamePacketListenerImpl
+@@ -2904,7 +3074,7 @@ public class ServerGamePacketListenerImpl
              }
              // Spigot end
              this.player.resetLastActionTime();
@@ -25214,7 +25227,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                  AABB targetBounds = target.getBoundingBox();
                  ItemStack mainHandItem = this.player.getMainHandItem();
                  if (this.player.isWithinAttackRange(mainHandItem, targetBounds, io.papermc.paper.configuration.GlobalConfiguration.get().misc.clientInteractionLeniencyDistance.or(3.0))) { // Paper - configurable lenience
-@@ -2946,7 +3116,7 @@ public class ServerGamePacketListenerImpl
+@@ -2947,7 +3117,7 @@ public class ServerGamePacketListenerImpl
              // Spigot end
              this.player.resetLastActionTime();
              this.player.setShiftKeyDown(packet.usingSecondaryAction());
@@ -25223,7 +25236,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                  AABB targetBounds = target.getBoundingBox();
                  if (this.player.isWithinEntityInteractionRange(targetBounds, io.papermc.paper.configuration.GlobalConfiguration.get().misc.clientInteractionLeniencyDistance.or(3.0))) { // Paper - configurable lenience value for interact range
                      InteractionHand hand = packet.hand();
-@@ -3051,6 +3221,13 @@ public class ServerGamePacketListenerImpl
+@@ -3052,6 +3222,13 @@ public class ServerGamePacketListenerImpl
          switch (action) {
              case PERFORM_RESPAWN:
                  if (this.player.wonGame) {
@@ -25237,7 +25250,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                      this.player.wonGame = false;
                      this.player = this.server.getPlayerList().respawn(this.player, true, Entity.RemovalReason.CHANGED_DIMENSION, RespawnReason.END_PORTAL); // CraftBukkit
                      this.resetPosition();
-@@ -3061,6 +3238,17 @@ public class ServerGamePacketListenerImpl
+@@ -3062,6 +3239,17 @@ public class ServerGamePacketListenerImpl
                          return;
                      }
  
@@ -25255,7 +25268,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                      this.player = this.server.getPlayerList().respawn(this.player, false, Entity.RemovalReason.KILLED, RespawnReason.DEATH); // CraftBukkit
                      this.resetPosition();
                      this.restartClientLoadTimerAfterRespawn();
-@@ -3609,7 +3797,13 @@ public class ServerGamePacketListenerImpl
+@@ -3610,7 +3798,13 @@ public class ServerGamePacketListenerImpl
          };
          List<String> lines = packet.lines().stream().map(lineLimiter).map(ChatFormatting::stripFormatting).collect(Collectors.toList());
          // Paper end - limit client sign length
@@ -25270,7 +25283,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
      }
  
      private void updateSignText(final ServerboundSignUpdatePacket packet, final List<FilteredText> lines) {
-@@ -3617,7 +3811,7 @@ public class ServerGamePacketListenerImpl
+@@ -3618,7 +3812,7 @@ public class ServerGamePacketListenerImpl
          this.player.resetLastActionTime();
          ServerLevel level = this.player.level();
          BlockPos pos = packet.pos();
@@ -25279,7 +25292,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
              // Paper start - Add API for client-side signs
              if (!new io.papermc.paper.event.packet.UncheckedSignChangeEvent(
                  this.player.getBukkitEntity(),
-@@ -3766,7 +3960,7 @@ public class ServerGamePacketListenerImpl
+@@ -3767,7 +3961,7 @@ public class ServerGamePacketListenerImpl
          this.chatMessageChain
              .append(
                  () -> {
@@ -25288,7 +25301,7 @@ index 71526e9e241f0cd6d92432af72bfbd7fdbee1f77..0c0f9bdb399aa3e087c62c0281fc4300
                      this.player.setChatSession(chatSession);
                      this.server
                          .getPlayerList()
-@@ -3873,19 +4067,7 @@ public class ServerGamePacketListenerImpl
+@@ -3874,19 +4068,7 @@ public class ServerGamePacketListenerImpl
  
      @Override
      public void disconnectAsync(final net.minecraft.network.DisconnectionDetails disconnectionInfo) {
@@ -25573,7 +25586,7 @@ index 6f18226ea5e01900d4d7683567e33d65a8baf384..46315f29c6415f949023d45947e38dac
              parsedDate = defaultValue;
          }
 diff --git a/net/minecraft/server/players/PlayerList.java b/net/minecraft/server/players/PlayerList.java
-index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99ed4607da 100644
+index b22b0110cc62b160b70ceeac9490b4b424639d66..7937256c9e0173694b44adc6d3added6530637bd 100644
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
 @@ -113,11 +113,13 @@ public abstract class PlayerList {
@@ -25593,7 +25606,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
      private final UserBanList bans;
      private final IpBanList ipBans;
      private final ServerOpList ops;
-@@ -134,9 +136,74 @@ public abstract class PlayerList {
+@@ -134,9 +136,78 @@ public abstract class PlayerList {
  
      // CraftBukkit start
      private org.bukkit.craftbukkit.CraftServer cserver;
@@ -25603,35 +25616,38 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
  
 +    // Folia start - region threading
 +    private final Object connectionsStateLock = new Object();
-+    private final Map<String, Connection> connectionByName = new java.util.HashMap<>();
-+    private final Map<UUID, Connection> connectionById = new java.util.HashMap<>();
++    private final Map<String, Connection> connectionByName = new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>();
++    private final Map<UUID, Connection> connectionById = new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>();
 +    private final it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<Connection> usersCountedAgainstLimit = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>();
 +
-+    public boolean pushPendingJoin(String userName, UUID byId, Connection conn) {
++    public boolean pushPendingJoin(String userName, final UUID byId, final Connection conn) {
 +        userName = userName.toLowerCase(java.util.Locale.ROOT);
-+        Connection conflictingName, conflictingId;
++
++        final Connection conflictingName, conflictingId;
 +        synchronized (this.connectionsStateLock) {
 +            conflictingName = this.connectionByName.get(userName);
 +            conflictingId = this.connectionById.get(byId);
 +
 +            if (conflictingName == null && conflictingId == null) {
-+                // Folia start - max concurrent login
-+                int loggedInCount = 0;
-+                for (Connection value : this.connectionById.values()) {
-+                    if (value.getPacketListener() instanceof ServerGamePacketListenerImpl) {
-+                        ++loggedInCount;
++                // Folia & Canvas start - max concurrent login
++                int loggingIn = 0;
++                for (final Connection value : this.connectionById.values()) {
++                    // only login phase players should count towards current logins
++                    if (value.getPacketListener() instanceof net.minecraft.server.network.ServerLoginPacketListenerImpl) {
++                        ++loggingIn;
 +                    }
 +                }
-+                if ((this.connectionById.size() - loggedInCount) >= io.papermc.paper.configuration.GlobalConfiguration.get().misc.maxJoinsPerTick) {
++
++                if (loggingIn >= io.papermc.paper.configuration.GlobalConfiguration.get().misc.maxJoinsPerTick) {
 +                    return false;
 +                }
-+                // Folia end - max concurrent login
++                // Folia & Canvas end - max concurrent login
 +                this.connectionByName.put(userName, conn);
 +                this.connectionById.put(byId, conn);
 +            }
 +        }
 +
-+        Component message = Component.translatable("multiplayer.disconnect.duplicate_login", new Object[0]);
++        final Component message = Component.translatable("multiplayer.disconnect.duplicate_login", new Object[0]);
 +
 +        if (conflictingId != null || conflictingName != null) {
 +            if (conflictingName != null && conflictingName.isPlayerConnected()) {
@@ -25645,8 +25661,9 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
 +        return conflictingName == null && conflictingId == null;
 +    }
 +
-+    public void removeConnection(String userName, UUID byId, Connection conn) {
++    public void removeConnection(String userName, final UUID byId, final Connection conn) {
 +        userName = userName.toLowerCase(java.util.Locale.ROOT);
++
 +        synchronized (this.connectionsStateLock) {
 +            this.connectionByName.remove(userName, conn);
 +            this.connectionById.remove(byId, conn);
@@ -25654,9 +25671,9 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
 +        }
 +    }
 +
-+    private boolean countConnection(Connection conn, int limit) {
++    private boolean countConnection(final Connection conn, final int limit) {
 +        synchronized (this.connectionsStateLock) {
-+            int count = this.usersCountedAgainstLimit.size();
++            final int count = this.usersCountedAgainstLimit.size();
 +            if (count > limit) { // Canvas - fix Folia max player count breaking Vanilla
 +                return false;
 +            }
@@ -25669,7 +25686,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
      public PlayerList(
          final MinecraftServer server,
          final LayeredRegistryAccess<RegistryLayer> registries,
-@@ -170,6 +237,10 @@ public abstract class PlayerList {
+@@ -170,6 +241,10 @@ public abstract class PlayerList {
          String address = connection.getLoggableAddress(this.server.logIPs());
          LevelData levelData = level.getLevelData();
          ServerGamePacketListenerImpl playerConnection = new ServerGamePacketListenerImpl(this.server, connection, player, cookie);
@@ -25680,7 +25697,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          connection.setupInboundProtocol(
              GameProtocols.SERVERBOUND_TEMPLATE.bind(RegistryFriendlyByteBuf.decorator(this.server.registryAccess()), playerConnection), playerConnection
          );
-@@ -232,6 +303,7 @@ public abstract class PlayerList {
+@@ -232,6 +307,7 @@ public abstract class PlayerList {
          player.suppressTrackerForLogin = true;
          this.sendLevelInfo(player, level);
          level.addNewPlayer(player);
@@ -25688,7 +25705,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          this.server.getCustomBossEvents().onPlayerConnect(player); // see commented out section below serverLevel.addPlayerJoin(player);
          // Paper end - Fire PlayerJoinEvent when Player is actually ready
          player.initInventoryMenu();
-@@ -245,7 +317,7 @@ public abstract class PlayerList {
+@@ -245,7 +321,7 @@ public abstract class PlayerList {
          this.cserver.getPluginManager().callEvent(playerJoinEvent);
  
          if (!player.connection.isAcceptingMessages()) {
@@ -25697,7 +25714,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          }
  
          final net.kyori.adventure.text.Component jm = playerJoinEvent.joinMessage();
-@@ -260,8 +332,7 @@ public abstract class PlayerList {
+@@ -260,8 +336,7 @@ public abstract class PlayerList {
          ClientboundPlayerInfoUpdatePacket packet = ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player)); // Paper - Add Listing API for Player
  
          final List<ServerPlayer> onlinePlayers = Lists.newArrayListWithExpectedSize(this.players.size() - 1); // Paper - Use single player info update packet on join
@@ -25707,7 +25724,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
  
              if (entityplayer1.getBukkitEntity().canSee(bukkitPlayer)) {
                  // Paper start - Add Listing API for Player
-@@ -312,7 +383,7 @@ public abstract class PlayerList {
+@@ -312,7 +387,7 @@ public abstract class PlayerList {
          // Paper start - Configurable player collision; Add to collideRule team if needed
          final net.minecraft.world.scores.Scoreboard scoreboard = this.getServer().getLevel(Level.OVERWORLD).getScoreboard();
          final PlayerTeam collideRuleTeam = scoreboard.getPlayerTeam(this.collideRuleTeamName);
@@ -25716,7 +25733,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
              scoreboard.addPlayerToTeam(player.getScoreboardName(), collideRuleTeam);
          }
          // Paper end - Configurable player collision
-@@ -417,7 +488,7 @@ public abstract class PlayerList {
+@@ -417,7 +492,7 @@ public abstract class PlayerList {
  
      public void save(final ServerPlayer player) {
          if (!player.getBukkitEntity().isPersistent()) return; // CraftBukkit
@@ -25725,7 +25742,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          this.playerIo.save(player);
          ServerStatsCounter stats = player.getStats(); // CraftBukkit
          if (stats != null) {
-@@ -451,7 +522,7 @@ public abstract class PlayerList {
+@@ -451,7 +526,7 @@ public abstract class PlayerList {
          // CraftBukkit end
  
          // Paper start - Configurable player collision; Remove from collideRule team if needed
@@ -25734,7 +25751,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
              final net.minecraft.world.scores.Scoreboard scoreBoard = this.server.getLevel(Level.OVERWORLD).getScoreboard();
              final PlayerTeam team = scoreBoard.getPlayersTeam(this.collideRuleTeamName);
              if (player.getTeam() == team && team != null) {
-@@ -489,16 +560,11 @@ public abstract class PlayerList {
+@@ -489,16 +564,11 @@ public abstract class PlayerList {
  
          player.unRide();
  
@@ -25753,7 +25770,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          player.getAdvancements().clearTriggers();
          this.players.remove(player);
          this.playersByName.remove(player.getScoreboardName().toLowerCase(java.util.Locale.ROOT)); // Spigot
-@@ -517,8 +583,7 @@ public abstract class PlayerList {
+@@ -517,8 +587,7 @@ public abstract class PlayerList {
          // CraftBukkit start
          // this.broadcastAll(new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID())));
          ClientboundPlayerInfoRemovePacket packet = new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID()));
@@ -25763,7 +25780,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
  
              if (otherPlayer.getBukkitEntity().canSee(player.getBukkitEntity())) {
                  otherPlayer.connection.send(packet);
-@@ -541,7 +606,7 @@ public abstract class PlayerList {
+@@ -541,7 +610,7 @@ public abstract class PlayerList {
          }
      }
      // Paper end - PlayerLoginEvent
@@ -25772,7 +25789,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          LoginResult whitelistEventResult; // Paper
          // Paper start - Fix MC-158900
          UserBanListEntry ban1;
-@@ -550,7 +615,7 @@ public abstract class PlayerList {
+@@ -550,7 +619,7 @@ public abstract class PlayerList {
              // Paper end - Fix MC-158900
              MutableComponent reason = Component.translatable("multiplayer.disconnect.banned.reason", ban.getReasonMessage());
              if (ban.getExpires() != null) {
@@ -25781,7 +25798,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
              }
  
              return new LoginResult(reason, org.bukkit.event.player.PlayerLoginEvent.Result.KICK_BANNED); // Paper - PlayerLoginEvent
-@@ -563,12 +628,12 @@ public abstract class PlayerList {
+@@ -563,12 +632,12 @@ public abstract class PlayerList {
                  IpBanListEntry ban = this.ipBans.get(address);
                  MutableComponent reason = Component.translatable("multiplayer.disconnect.banned_ip.reason", ban.getReasonMessage());
                  if (ban.getExpires() != null) {
@@ -25796,7 +25813,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
              }
          }
      }
-@@ -588,15 +653,18 @@ public abstract class PlayerList {
+@@ -588,15 +657,18 @@ public abstract class PlayerList {
              dupes.add(serverPlayer);
          }
  
@@ -25818,7 +25835,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          ServerPlayer.RespawnResult result = serverPlayer.findRespawnPositionAndUseSpawnBlock0(!keepAllPlayerData, TeleportTransition.DO_NOTHING, respawnReason);
          if (result == null) { // disconnected player during the respawn event
              return serverPlayer;
-@@ -743,10 +811,12 @@ public abstract class PlayerList {
+@@ -744,10 +816,12 @@ public abstract class PlayerList {
      public void tick() {
          if (++this.sendAllPlayerInfoIn > 600) {
              // CraftBukkit start
@@ -25834,7 +25851,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
              }
              // CraftBukkit end
              this.sendAllPlayerInfoIn = 0;
-@@ -764,8 +834,8 @@ public abstract class PlayerList {
+@@ -765,8 +839,8 @@ public abstract class PlayerList {
      }
  
      public void broadcastAll(Packet packet, Level world) {
@@ -25845,7 +25862,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          }
  
      }
-@@ -802,8 +872,7 @@ public abstract class PlayerList {
+@@ -803,8 +877,7 @@ public abstract class PlayerList {
          if (team == null) {
              this.broadcastSystemMessage(message, false);
          } else {
@@ -25855,7 +25872,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
                  if (targetPlayer.getTeam() != team) {
                      targetPlayer.sendSystemMessage(message);
                  }
-@@ -812,10 +881,13 @@ public abstract class PlayerList {
+@@ -813,10 +886,13 @@ public abstract class PlayerList {
      }
  
      public String[] getPlayerNamesArray() {
@@ -25872,7 +25889,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          }
  
          return names;
-@@ -842,7 +914,11 @@ public abstract class PlayerList {
+@@ -843,7 +919,11 @@ public abstract class PlayerList {
              );
          ServerPlayer player = this.getPlayer(nameAndId.id());
          if (player != null) {
@@ -25885,7 +25902,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          }
      }
  
-@@ -850,7 +926,11 @@ public abstract class PlayerList {
+@@ -851,7 +931,11 @@ public abstract class PlayerList {
          if (this.ops.remove(nameAndId)) {
              ServerPlayer player = this.getPlayer(nameAndId.id());
              if (player != null) {
@@ -25898,7 +25915,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
              }
          }
      }
-@@ -880,8 +960,11 @@ public abstract class PlayerList {
+@@ -881,8 +965,11 @@ public abstract class PlayerList {
      }
  
      // Paper start - whitelist verify event / login event
@@ -25912,7 +25929,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          final io.papermc.paper.event.player.PlayerServerFullCheckEvent fullCheckEvent = new io.papermc.paper.event.player.PlayerServerFullCheckEvent(
              new com.destroystokyo.paper.profile.CraftPlayerProfile(nameAndId),
              io.papermc.paper.adventure.PaperAdventure.asAdventure(currentResult.message),
-@@ -936,8 +1019,7 @@ public abstract class PlayerList {
+@@ -937,8 +1024,7 @@ public abstract class PlayerList {
          final ResourceKey<Level> dimension,
          final Packet<?> packet
      ) {
@@ -25922,7 +25939,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
              // CraftBukkit start - Test if player receiving packet can see the source of the packet
              if (except != null && !player.getBukkitEntity().canSee(except.getBukkitEntity())) {
                 continue;
-@@ -960,20 +1042,36 @@ public abstract class PlayerList {
+@@ -961,20 +1047,36 @@ public abstract class PlayerList {
      }
      public void saveAll(final int interval) {
          // Paper end - Incremental chunk and player saving
@@ -25964,7 +25981,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
      }
  
      public UserWhiteList getWhiteList() {
-@@ -1018,7 +1116,7 @@ public abstract class PlayerList {
+@@ -1019,7 +1121,7 @@ public abstract class PlayerList {
          }
  
          player.connection.send(new ClientboundGameEventPacket(ClientboundGameEventPacket.LEVEL_CHUNKS_LOAD_START, 0.0F));
@@ -25973,7 +25990,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
      }
  
      public void sendAllPlayerInfo(final ServerPlayer player) {
-@@ -1082,6 +1180,20 @@ public abstract class PlayerList {
+@@ -1083,6 +1185,20 @@ public abstract class PlayerList {
      }
  
      public void removeAll(boolean isRestarting) {
@@ -25994,7 +26011,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          // Paper end
          // CraftBukkit start - disconnect safely
          for (ServerPlayer player : this.players) {
-@@ -1091,7 +1203,7 @@ public abstract class PlayerList {
+@@ -1092,7 +1208,7 @@ public abstract class PlayerList {
          // CraftBukkit end
  
          // Paper start - Configurable player collision; Remove collideRule team if it exists
@@ -26003,7 +26020,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
              final net.minecraft.world.scores.Scoreboard scoreboard = this.getServer().getLevel(Level.OVERWORLD).getScoreboard();
              final PlayerTeam team = scoreboard.getPlayersTeam(this.collideRuleTeamName);
              if (team != null) scoreboard.removePlayerTeam(team);
-@@ -1273,8 +1385,17 @@ public abstract class PlayerList {
+@@ -1274,8 +1390,17 @@ public abstract class PlayerList {
          //     playerAdvancements.reload(this.server.getAdvancements());
          // }
          for (ServerPlayer player : this.players) {
@@ -26023,7 +26040,7 @@ index df4e4dfc2400dce946a7e6e6f02ad83e24ac449d..610c247d40f61d1db870d05432555d99
          }
          // CraftBukkit end
  
-@@ -1295,8 +1416,17 @@ public abstract class PlayerList {
+@@ -1296,8 +1421,17 @@ public abstract class PlayerList {
          );
  
          for (ServerPlayer player : this.players) {
@@ -27088,7 +27105,7 @@ index bb5f66c62c9541bb76a9faad9e9ee91c1466fc6a..66d7bb9418832638c220a08d06c01ef0
              return blockToFallLocation(blockState);
          } else {
 diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
-index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9fb676ccaf 100644
+index be82ab46f805a70c1d920ec7f16ae5ef64579ca0..24579b9f58685f269291a9b729e319d50a7dedcb 100644
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
 @@ -172,7 +172,7 @@ public abstract class Entity
@@ -27206,7 +27223,28 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
  
      public Entity(final EntityType<?> type, final Level level) {
          this.type = type;
-@@ -705,7 +776,7 @@ public abstract class Entity
+@@ -610,12 +681,18 @@ public abstract class Entity
+     }
+ 
+     public final void unRide() {
++    // Canvas start - region threading
++        unRide(false);
++    }
++
++    public final void unRide(final boolean suppressCancellation) {
++    // Canvas end - region threading
+         if (this.isVehicle()) {
+-            this.ejectPassengers();
++            this.ejectPassengers(suppressCancellation); // Canvas - region threading
+         }
+ 
+         if (this.isPassenger()) {
+-            this.stopRiding();
++            this.stopRiding(suppressCancellation); // Canvas - region threading
+         }
+     }
+ 
+@@ -705,7 +782,7 @@ public abstract class Entity
      public void resendPossiblyDesyncedEntityData(ServerPlayer player) {
          if (player.getBukkitEntity().canSee(this.getBukkitEntity())) {
              ServerLevel level = (ServerLevel) this.level();
@@ -27215,7 +27253,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
              if (tracker == null) {
                  return;
              }
-@@ -888,7 +959,7 @@ public abstract class Entity
+@@ -888,7 +965,7 @@ public abstract class Entity
      public void postTick() {
          // No clean way to break out of ticking once the entity has been copied to a new world, so instead we move the portalling later in the tick cycle
          if (!(this instanceof ServerPlayer) && this.isAlive()) { // Paper - don't attempt to teleport dead entities
@@ -27224,7 +27262,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
          }
      }
      // CraftBukkit end
-@@ -905,7 +976,7 @@ public abstract class Entity
+@@ -905,7 +982,7 @@ public abstract class Entity
              this.boardingCooldown--;
          }
  
@@ -27233,7 +27271,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
          if (this.canSpawnSprintParticle()) {
              this.spawnSprintParticle();
          }
-@@ -1150,6 +1221,17 @@ public abstract class Entity
+@@ -1150,6 +1227,17 @@ public abstract class Entity
          final Vec3 originalMovement = delta; // Paper - Expose pre-collision velocity
          ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread("Cannot move an entity off-main");
          if (this.noPhysics) {
@@ -27251,7 +27289,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
              this.setPos(this.getX() + delta.x, this.getY() + delta.y, this.getZ() + delta.z);
              this.recordMovement(moverType, delta);
              this.horizontalCollision = false;
-@@ -1160,8 +1242,8 @@ public abstract class Entity
+@@ -1160,8 +1248,8 @@ public abstract class Entity
              if (moverType == MoverType.PISTON) {
                  delta = this.limitPistonMovement(delta);
                  // Paper start - EAR 2
@@ -27262,7 +27300,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
                  // Paper end - EAR 2
                  if (delta.equals(Vec3.ZERO)) {
                      return;
-@@ -1184,6 +1266,17 @@ public abstract class Entity
+@@ -1184,6 +1272,17 @@ public abstract class Entity
              // Paper end
  
              delta = this.maybeBackOffFromEdge(delta, moverType);
@@ -27280,7 +27318,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
              Vec3 movement = this.collide(delta);
              double movementLength = movement.lengthSqr();
              if (movementLength > 1.0E-7 || delta.lengthSqr() - movementLength < 1.0E-7) {
-@@ -1199,6 +1292,18 @@ public abstract class Entity
+@@ -1199,6 +1298,18 @@ public abstract class Entity
  
                  Vec3 pos = this.position();
                  Vec3 newPosition = pos.add(movement);
@@ -27299,7 +27337,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
                  this.addMovementThisTick(new Entity.Movement(pos, newPosition, delta));
                  this.setPos(newPosition);
                  this.recordMovement(moverType, movement);
-@@ -1579,7 +1684,7 @@ public abstract class Entity
+@@ -1579,7 +1690,7 @@ public abstract class Entity
              return vec;
          }
  
@@ -27308,7 +27346,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
          if (currentGameTime != this.pistonDeltasGameTime) {
              Arrays.fill(this.pistonDeltas, 0.0);
              this.pistonDeltasGameTime = currentGameTime;
-@@ -1853,6 +1958,11 @@ public abstract class Entity
+@@ -1853,6 +1964,11 @@ public abstract class Entity
                      return false;
                  }
  
@@ -27320,7 +27358,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
                  iterations.set(iteration);
                  BlockState state = this.level().getBlockState(blockIntersection);
                  if (state.isAir()) {
-@@ -3376,6 +3486,7 @@ public abstract class Entity
+@@ -3376,6 +3492,7 @@ public abstract class Entity
          }
  
          if (force || this.canRide(entityToRide) && entityToRide.canAddPassenger(this)) {
@@ -27328,7 +27366,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
              // CraftBukkit start
              if (entityToRide.getBukkitEntity() instanceof org.bukkit.entity.Vehicle vehicle && this instanceof LivingEntity entered) {
                  org.bukkit.event.vehicle.VehicleEnterEvent event = new org.bukkit.event.vehicle.VehicleEnterEvent(vehicle, entered.getBukkitEntity());
-@@ -3397,6 +3508,7 @@ public abstract class Entity
+@@ -3397,6 +3514,7 @@ public abstract class Entity
                  return false;
              }
              // CraftBukkit end
@@ -27336,7 +27374,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
              if (this.isPassenger()) {
                  this.stopRiding();
              }
-@@ -3405,7 +3517,7 @@ public abstract class Entity
+@@ -3405,7 +3523,7 @@ public abstract class Entity
              this.vehicle = entityToRide;
              this.vehicle.addPassenger(this);
              if (sendEventAndTriggers) {
@@ -27345,7 +27383,23 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
                  entityToRide.getIndirectPassengersStream()
                      .filter(e -> e instanceof ServerPlayer)
                      .forEach(player -> CriteriaTriggers.START_RIDING_TRIGGER.trigger((ServerPlayer)player));
-@@ -3446,7 +3558,7 @@ public abstract class Entity
+@@ -3422,8 +3540,14 @@ public abstract class Entity
+     }
+ 
+     public void ejectPassengers() {
++    // Canvas start - region threading
++        ejectPassengers(false);
++    }
++
++    public void ejectPassengers(final boolean suppressCancellation) {
++    // Canvas end - region threading
+         for (int i = this.passengers.size() - 1; i >= 0; i--) {
+-            this.passengers.get(i).stopRiding();
++            this.passengers.get(i).stopRiding(suppressCancellation); // Canvas - region threading
+         }
+     }
+ 
+@@ -3446,7 +3570,7 @@ public abstract class Entity
              if (!oldVehicle.removePassenger(this, suppressCancellation)) this.vehicle = oldVehicle; // CraftBukkit // Paper - Force entity dismount during teleportation
              Entity.RemovalReason removalReason = this.getRemovalReason();
              if (removalReason == null || removalReason.shouldDestroy()) {
@@ -27354,7 +27408,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
              }
          }
      }
-@@ -3491,6 +3603,7 @@ public abstract class Entity
+@@ -3491,6 +3615,7 @@ public abstract class Entity
              throw new IllegalStateException("Use x.stopRiding(y), not y.removePassenger(x)");
          }
          // CraftBukkit start
@@ -27362,7 +27416,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
          org.bukkit.craftbukkit.entity.CraftEntity craft = (org.bukkit.craftbukkit.entity.CraftEntity) passenger.getBukkitEntity().getVehicle();
          Entity orig = craft == null ? null : craft.getHandle();
          if (this.getBukkitEntity() instanceof org.bukkit.entity.Vehicle vehicle && passenger instanceof LivingEntity exited) {
-@@ -3517,6 +3630,7 @@ public abstract class Entity
+@@ -3517,6 +3642,7 @@ public abstract class Entity
              return false;
          }
          // CraftBukkit end
@@ -27370,7 +27424,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
          if (this.passengers.size() == 1 && this.passengers.get(0) == passenger) {
              this.passengers = ImmutableList.of();
          } else {
-@@ -3594,6 +3708,15 @@ public abstract class Entity
+@@ -3594,6 +3720,15 @@ public abstract class Entity
          return calculateViewQuaternion(this.getXRot(), this.getYRot());
      }
  
@@ -27386,7 +27440,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
      public Vec3 getHeadLookAngle() {
          return calculateViewVector(this.getXRot(), this.getYHeadRot());
      }
-@@ -3629,28 +3752,23 @@ public abstract class Entity
+@@ -3629,28 +3764,23 @@ public abstract class Entity
          }
      }
  
@@ -27419,7 +27473,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
      }
  
      public int getDimensionChangingDelay() {
-@@ -4139,12 +4257,20 @@ public abstract class Entity
+@@ -4135,12 +4265,20 @@ public abstract class Entity
      }
  
      public void restoreFrom(final Entity oldEntity) {
@@ -27440,7 +27494,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
          // Paper end - Forward CraftEntity in teleport command
          try (ProblemReporter.ScopedCollector reporter = new ProblemReporter.ScopedCollector(this.problemPath(), LOGGER)) {
              TagValueOutput entityData = TagValueOutput.createWithContext(reporter, oldEntity.registryAccess());
-@@ -4156,7 +4282,1405 @@ public abstract class Entity
+@@ -4152,7 +4290,1414 @@ public abstract class Entity
          this.portalProcess = oldEntity.portalProcess;
      }
  
@@ -27935,7 +27989,8 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
 +                entity.getBukkitEntity(); // force bukkit entity to be created before TPing
 +            }
 +        } else {
-+            this.unRide();
++            // we have to suppress cancellation here otherwise.. uhhh.. we fucked
++            this.unRide(true);
 +        }
 +
 +        if ((teleportFlags & TELEPORT_FLAG_TELEPORT_PASSENGERS) != 0L) {
@@ -28535,6 +28590,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
 +        final @Nullable ServerLevel to, final boolean considerPassengers, final boolean skipPassengerCheck
 +    ) throws TeleportValidationException {
 +        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(this, "Cannot portal entity async");
++
 +        if (considerPassengers) {
 +            if (!skipPassengerCheck && this.isPassenger()) {
 +                throw new TeleportValidationException("Entity is passenger");
@@ -28544,17 +28600,24 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
 +                throw new TeleportValidationException("Entity is passenger or vehicle");
 +            }
 +        }
++
 +        this.getBukkitEntity(); // force bukkit entity to be created before TPing
 +        if (!this.canTeleportAsync()) {
 +            throw new TeleportValidationException("Entity not able to teleport async. Is the entity removed or in a bed?");
 +        }
++
 +        if (considerPassengers) {
 +            for (final Entity entity : this.passengers) {
 +                entity.canvas$ensureCanPortalAsync(to, true, true);
 +            }
 +        }
++
 +        if (to != null && to.canvas$unloadTicket.isPresent()) {
 +            throw new TeleportValidationException("Destination world is marked for unload");
++        }
++
++        if (to != null && !((ServerLevel) this.level).isAllowedToEnterPortal(to)) {
++            throw new TeleportValidationException("Not allowed to enter portal(gamerule?)");
 +        }
 +    }
 +
@@ -28846,7 +28909,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
          // Paper start - Fix item duplication and teleport issues
          if ((!this.isAlive() || !this.valid) && (transition.newLevel() != this.level)) {
              LOGGER.warn("Illegal Entity Teleport {} to {}:{}", this, transition.newLevel(), transition.position(), new Throwable());
-@@ -4368,6 +5892,12 @@ public abstract class Entity
+@@ -4364,6 +5909,12 @@ public abstract class Entity
          }
      }
  
@@ -28859,7 +28922,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
      protected void removeAfterChangingDimensions() {
          this.setRemoved(Entity.RemovalReason.CHANGED_DIMENSION, null); // CraftBukkit - add Bukkit remove cause
          if (this instanceof Leashable leashable && leashable.isLeashed()) { // Paper - only call if it is leashed
-@@ -4712,6 +6242,12 @@ public abstract class Entity
+@@ -4708,6 +6259,12 @@ public abstract class Entity
      }
  
      public void startSeenByPlayer(final ServerPlayer player) {
@@ -28872,7 +28935,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
      }
  
      public void stopSeenByPlayer(final ServerPlayer player) {
-@@ -4721,6 +6257,12 @@ public abstract class Entity
+@@ -4717,6 +6274,12 @@ public abstract class Entity
              new io.papermc.paper.event.player.PlayerUntrackEntityEvent(player.getBukkitEntity(), this.getBukkitEntity()).callEvent();
          }
          // Paper end - entity tracking events
@@ -28885,7 +28948,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
      }
  
      public float rotate(final Rotation rotation) {
-@@ -5128,7 +6670,10 @@ public abstract class Entity
+@@ -5124,7 +6687,10 @@ public abstract class Entity
              return;
          }
          // Paper end - Block invalid positions and bounding box
@@ -28897,7 +28960,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
              this.position = new Vec3(x, y, z);
              int fx = Mth.floor(x);
              int fy = Mth.floor(y);
-@@ -5159,7 +6704,7 @@ public abstract class Entity
+@@ -5155,7 +6721,7 @@ public abstract class Entity
          }
          // Paper start - Block invalid positions and bounding box; don't allow desync of pos and AABB
          // hanging has its own special logic
@@ -28906,7 +28969,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
              this.setBoundingBox(this.makeBoundingBox());
          }
          // Paper end - Block invalid positions and bounding box
-@@ -5234,6 +6779,7 @@ public abstract class Entity
+@@ -5230,6 +6796,7 @@ public abstract class Entity
              Util.logAndPauseIfInIde("Invalid entity rotation: " + yRot + ", discarding.");
          } else {
              this.yRot = yRot;
@@ -28914,7 +28977,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
          }
      }
  
-@@ -5246,6 +6792,7 @@ public abstract class Entity
+@@ -5242,6 +6809,7 @@ public abstract class Entity
              Util.logAndPauseIfInIde("Invalid entity rotation: " + xRot + ", discarding.");
          } else {
              this.xRot = Math.clamp(xRot % 360.0F, -90.0F, 90.0F);
@@ -28922,7 +28985,7 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
          }
      }
  
-@@ -5278,6 +6825,12 @@ public abstract class Entity
+@@ -5274,6 +6842,12 @@ public abstract class Entity
          return this.removalReason != null;
      }
  
@@ -28935,26 +28998,26 @@ index 2d8c767616aa4bc5ab1fe7d792ca0d1cdff66e39..876fcf8dd5ff2c48abb0fbbd9af5fc9f
      public Entity.@Nullable RemovalReason getRemovalReason() {
          return this.removalReason;
      }
-@@ -5292,6 +6845,7 @@ public abstract class Entity
+@@ -5288,6 +6862,7 @@ public abstract class Entity
          // Paper end - rewrite chunk system
          org.bukkit.craftbukkit.event.CraftEventFactory.callEntityRemoveEvent(this, cause); // CraftBukkit
          final boolean alreadyRemoved = this.removalReason != null; // Paper - Folia schedulers
-+        this.preRemove(removalReason); // Folia - region threading
++        this.preRemove(reason); // Folia - region threading
          if (this.removalReason == null) {
              this.removalReason = reason;
              this.removeEventCause = cause; // Paper
-@@ -5320,6 +6874,10 @@ public abstract class Entity
+@@ -5316,6 +6891,10 @@ public abstract class Entity
          // Paper end
      }
  
 +    // Folia start - region threading
-+    protected void preRemove(Entity.RemovalReason reason) {}
++    protected void preRemove(final Entity.RemovalReason reason) {}
 +
 +    // Folia end - region threading
      // Paper start - Folia schedulers
      /**
       * Invoked only when the entity is truly removed from the server, never to be added to any world.
-@@ -5331,7 +6889,7 @@ public abstract class Entity
+@@ -5327,7 +6906,7 @@ public abstract class Entity
      // Paper end - Folia schedulers
      // Paper start - optimise Folia entity scheduler
      public final void registerScheduler() {
@@ -29096,7 +29159,7 @@ index c756d28b396520264336832f17527981248556f3..4e150f4807c83e8f673b53e5e8b9e1da
                      }
                  }
 diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
-index eb0d0706912fe35bd6ffa81b42edaa01af0bb4e2..7c26ad4920b6751ee8c128d27660f090c4d1d27c 100644
+index eb0d0706912fe35bd6ffa81b42edaa01af0bb4e2..465f06f6ffedd6e5a708f284e4d74522dbae5d10 100644
 --- a/net/minecraft/world/entity/LivingEntity.java
 +++ b/net/minecraft/world/entity/LivingEntity.java
 @@ -277,7 +277,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
@@ -29166,7 +29229,7 @@ index eb0d0706912fe35bd6ffa81b42edaa01af0bb4e2..7c26ad4920b6751ee8c128d27660f090
 -            this.remove(Entity.RemovalReason.KILLED, org.bukkit.event.entity.EntityRemoveEvent.Cause.DEATH); // CraftBukkit - add Bukkit remove cause
 +            this.level().broadcastEntityEvent(this, EntityEvent.POOF); this.broadcastedDeath = true; // Folia - region threading - death has been broadcasted
 +            if (!(this instanceof ServerPlayer)) this.remove(Entity.RemovalReason.KILLED, org.bukkit.event.entity.EntityRemoveEvent.Cause.DEATH); // CraftBukkit - add Bukkit remove cause // Folia - region threading - don't remove, we want the tick scheduler to be running
-+            if (this instanceof ServerPlayer) this.unRide(); // Folia - region threading - unmount player when dead
++            if (this instanceof ServerPlayer) this.unRide(true); // Folia - region threading - unmount player when dead
          }
      }
  
@@ -29641,7 +29704,7 @@ index f744ecd20dc70786311a7162b52aa4ceca0717db..6e841dbc3c8020c9ff073fd497c4fc19
          walker.getBrain().setMemory(MemoryModuleType.LOOK_TARGET, target);
          walker.getBrain().setMemory(MemoryModuleType.WALK_TARGET, walkTarget);
 diff --git a/net/minecraft/world/entity/ai/behavior/GoToPotentialJobSite.java b/net/minecraft/world/entity/ai/behavior/GoToPotentialJobSite.java
-index ba61762e09ace201173999b3984046f930ccfe57..8375aa00cc075d02f7b4359d170e19eb392bd9df 100644
+index ba61762e09ace201173999b3984046f930ccfe57..2269da1bb362f93363d81db8d8e5539744638113 100644
 --- a/net/minecraft/world/entity/ai/behavior/GoToPotentialJobSite.java
 +++ b/net/minecraft/world/entity/ai/behavior/GoToPotentialJobSite.java
 @@ -45,12 +45,14 @@ public class GoToPotentialJobSite extends Behavior<Villager> {
@@ -29654,7 +29717,8 @@ index ba61762e09ace201173999b3984046f930ccfe57..8375aa00cc075d02f7b4359d170e19eb
                      manager.release(pos);
                  }
  
-                 level.debugSynchronizers().updatePoi(pos);
+-                level.debugSynchronizers().updatePoi(pos);
++                serverLevel.debugSynchronizers().updatePoi(pos); // Canvas - region threading // TODO - is this a Vanilla bug?
 +                }); // Folia - region threading
              }
          });
@@ -30733,7 +30797,7 @@ index 625996a7e1c6ec51312d25d7a94a08caccba32de..7514addc399e122504eaf93a2eff83ef
              return true;
          }
 diff --git a/net/minecraft/world/entity/player/Player.java b/net/minecraft/world/entity/player/Player.java
-index 4068dc1cea4edca196dc0c58b4804e94dd07881e..4893f0db978a1ba16f225ad3f179a24fa6daa830 100644
+index 4068dc1cea4edca196dc0c58b4804e94dd07881e..edaba01d20b8de0f8593cf1a6a6ca6d19d01ae09 100644
 --- a/net/minecraft/world/entity/player/Player.java
 +++ b/net/minecraft/world/entity/player/Player.java
 @@ -1385,6 +1385,14 @@ public abstract class Player extends Avatar implements ContainerUser {
@@ -30742,7 +30806,7 @@ index 4068dc1cea4edca196dc0c58b4804e94dd07881e..4893f0db978a1ba16f225ad3f179a24f
  
 +    // Folia start - region threading
 +    @Override
-+    protected void preRemove(RemovalReason reason) {
++    protected void preRemove(final RemovalReason reason) {
 +        super.preRemove(reason);
 +        this.fishing = null;
 +    }
@@ -30768,7 +30832,7 @@ index 5b61c20fcac6825a1891c674870f40074eff22d3..c7b4988a2ece7549a7af5647673ecf9a
              if (this.attachedToEntity != null) {
                  Vec3 handAngle;
 diff --git a/net/minecraft/world/entity/projectile/FishingHook.java b/net/minecraft/world/entity/projectile/FishingHook.java
-index adc1017a4f35e0457c780c100bba3326c17a7de9..1f13933300abe31e082617b7ef0dee11fe150ab4 100644
+index adc1017a4f35e0457c780c100bba3326c17a7de9..04f28704a76d399d713acb918dd7d58a63a2432d 100644
 --- a/net/minecraft/world/entity/projectile/FishingHook.java
 +++ b/net/minecraft/world/entity/projectile/FishingHook.java
 @@ -208,7 +208,7 @@ public class FishingHook extends Projectile {
@@ -30803,7 +30867,7 @@ index adc1017a4f35e0457c780c100bba3326c17a7de9..1f13933300abe31e082617b7ef0dee11
  
 +    // Folia start - region threading
 +    @Override
-+    protected void preRemove(RemovalReason reason) {
++    protected void preRemove(final RemovalReason reason) {
 +        super.preRemove(reason);
 +        this.updateOwnerInfo(null);
 +    }
@@ -30875,6 +30939,19 @@ index 5a52d3b4ef36b2d57f943514956a016421fff650..4f1ccd2e6fd8dda79812135d71bd230d
              projectile.setDeltaMovement(lookAngle.multiply(power));
              projectile.needsSync = true;
          }
+diff --git a/net/minecraft/world/entity/projectile/ShulkerBullet.java b/net/minecraft/world/entity/projectile/ShulkerBullet.java
+index 1b80fa0239ec0c23515639f2b58905eade80412d..f5dddcb8c8410362aaa21f83804fb0057452ff1f 100644
+--- a/net/minecraft/world/entity/projectile/ShulkerBullet.java
++++ b/net/minecraft/world/entity/projectile/ShulkerBullet.java
+@@ -229,7 +229,7 @@ public class ShulkerBullet extends Projectile {
+         this.setPos(this.position().add(movement));
+         this.applyEffectsFromBlocks();
+         if (this.portalProcess != null && this.portalProcess.isInsidePortalThisTick()) {
+-            this.handlePortal();
++            if (this.handlePortal()) return; // Canvas - region threading
+         }
+ 
+         if (hitResult != null && this.isAlive() && hitResult.getType() != HitResult.Type.MISS) {
 diff --git a/net/minecraft/world/entity/projectile/ThrowableProjectile.java b/net/minecraft/world/entity/projectile/ThrowableProjectile.java
 index 787addf20375517333f2b75f20aff026c5b953d1..e131cd7180b5310f2b4392f0d547f112967b17b4 100644
 --- a/net/minecraft/world/entity/projectile/ThrowableProjectile.java
@@ -30892,7 +30969,7 @@ index 787addf20375517333f2b75f20aff026c5b953d1..e131cd7180b5310f2b4392f0d547f112
          this.applyGravity();
          this.applyInertia();
 diff --git a/net/minecraft/world/entity/projectile/arrow/AbstractArrow.java b/net/minecraft/world/entity/projectile/arrow/AbstractArrow.java
-index 82f279c48cf3da6856ad96f753ee1a36dde9c725..61afcf004e5b5f0587a8ea59986ebedde9db015a 100644
+index 82f279c48cf3da6856ad96f753ee1a36dde9c725..e3b6a0c3b1b78605247e6c2aa464f906cf3ddf40 100644
 --- a/net/minecraft/world/entity/projectile/arrow/AbstractArrow.java
 +++ b/net/minecraft/world/entity/projectile/arrow/AbstractArrow.java
 @@ -182,6 +182,11 @@ public abstract class AbstractArrow extends Projectile {
@@ -30907,7 +30984,42 @@ index 82f279c48cf3da6856ad96f753ee1a36dde9c725..61afcf004e5b5f0587a8ea59986ebedd
          boolean physicsEnabled = !this.isNoPhysics();
          Vec3 movement = this.getDeltaMovement();
          BlockPos blockPos = this.blockPosition();
-@@ -523,11 +528,20 @@ public abstract class AbstractArrow extends Projectile {
+@@ -269,7 +274,7 @@ public abstract class AbstractArrow extends Projectile {
+                     .clipIncludingBorder(
+                         new ClipContext(originalPosition, originalPosition.add(movement), ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this)
+                     );
+-                this.stepMoveAndHit(blockHitResult);
++                if (this.stepMoveAndHit(blockHitResult)) return; // Canvas - region threading
+             } else {
+                 this.setPos(originalPosition.add(movement));
+                 this.applyEffectsFromBlocks();
+@@ -292,7 +297,7 @@ public abstract class AbstractArrow extends Projectile {
+         return 0.99F;
+     }
+ 
+-    private void stepMoveAndHit(final BlockHitResult blockHitResult) {
++    private boolean stepMoveAndHit(final BlockHitResult blockHitResult) { // Canvas - region threading - void -> bool
+         while (this.isAlive()) {
+             Vec3 initialPosition = this.position();
+             ArrayList<EntityHitResult> entitiesHit = new ArrayList<>(this.findHitEntities(initialPosition, blockHitResult.getLocation()));
+@@ -302,7 +307,7 @@ public abstract class AbstractArrow extends Projectile {
+             this.setPos(nextLocation);
+             this.applyEffectsFromBlocks(initialPosition, nextLocation);
+             if (this.portalProcess != null && this.portalProcess.isInsidePortalThisTick()) {
+-                this.handlePortal();
++                if (this.handlePortal()) return true; // Canvas - region threading
+             }
+ 
+             if (entitiesHit.isEmpty()) {
+@@ -320,6 +325,7 @@ public abstract class AbstractArrow extends Projectile {
+                 break;
+             }
+         }
++        return false; // Canvas - region threading
+     }
+ 
+     private ProjectileDeflection hitTargetsOrDeflectSelf(final Collection<EntityHitResult> entityHitResults) {
+@@ -523,11 +529,20 @@ public abstract class AbstractArrow extends Projectile {
                      this.piercedAndKilledEntities.add(mob);
                  }
  
@@ -30995,7 +31107,7 @@ index 1d5449090d0649cb03cf87a0175aebedded20132..8761bdaf737c02a153fc5fafdd0c82a9
                          if (chicken instanceof Chicken realChicken) {
                              Optional.ofNullable(this.getItem().get(DataComponents.CHICKEN_VARIANT)).ifPresent(realChicken::setVariant);
 diff --git a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
-index 4abbb6a8029f6c77fdbeda9376d3d5cc5970896d..638a790443e92ed120ff2ab37b05bc47e0ea45b5 100644
+index 4abbb6a8029f6c77fdbeda9376d3d5cc5970896d..23ae464f9fcf3301efa673c05ea37e9d0617b661 100644
 --- a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
 +++ b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
 @@ -81,6 +81,83 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
@@ -31019,7 +31131,7 @@ index 4abbb6a8029f6c77fdbeda9376d3d5cc5970896d..638a790443e92ed120ff2ab37b05bc47
 +
 +                // dismount from any vehicles, so we can teleport and to prevent desync
 +                if (entity.isPassenger()) {
-+                    entity.unRide();
++                    entity.unRide(true);
 +                }
 +
 +                if (onPortalCooldown) {
@@ -34820,7 +34932,7 @@ index f359e53024019f35aaa5cd8477da708bda2fc57a..65bb86910f333ee41aec2347a1a9ce87
          return tag;
      }
 diff --git a/net/minecraft/world/scores/Objective.java b/net/minecraft/world/scores/Objective.java
-index 64ea4741b7ed58fe7914b9431353abd1f658a935..886883cf81c813e3faac8aae951615e56011ae51 100644
+index ab620a3a674c30ee74e2319a9223cd6dbea6ffa4..b7f1d798dba1683a1a0eb6122bd99d01fcbf0aa5 100644
 --- a/net/minecraft/world/scores/Objective.java
 +++ b/net/minecraft/world/scores/Objective.java
 @@ -17,11 +17,16 @@ public class Objective {
@@ -34828,7 +34940,7 @@ index 64ea4741b7ed58fe7914b9431353abd1f658a935..886883cf81c813e3faac8aae951615e5
      private final String name;
      private final ObjectiveCriteria criteria;
 -    private Component displayName;
--    private Component formattedDisplayName;
+-    private @Nullable Component lazyFormattedDisplayName; // Paper - Lazy initialization because only used internally by commands
 -    private ObjectiveCriteria.RenderType renderType;
 -    private boolean displayAutoUpdate;
 -    private @Nullable NumberFormat numberFormat;
@@ -34845,18 +34957,17 @@ index 64ea4741b7ed58fe7914b9431353abd1f658a935..886883cf81c813e3faac8aae951615e5
  
      public Objective(
          final Scoreboard scoreboard,
-@@ -35,15 +40,15 @@ public class Objective {
+@@ -35,14 +40,15 @@ public class Objective {
          this.scoreboard = scoreboard;
          this.name = name;
          this.criteria = criteria;
 -        this.displayName = displayName;
--        this.formattedDisplayName = this.createFormattedDisplayName();
 -        this.renderType = renderType;
 -        this.displayAutoUpdate = displayAutoUpdate;
 -        this.numberFormat = numberFormat;
 +        // Canvas start - region threading
 +        this.objectiveData = new io.canvasmc.canvas.util.LockedReference<>(new io.canvasmc.canvas.threadedregions.world.scores.ObjectiveData(
-+            createFormattedDisplayName(displayName), renderType, displayAutoUpdate, numberFormat, displayName
++            null, renderType, displayAutoUpdate, numberFormat, displayName, Objective.this
 +        ));
 +        // Canvas end - region threading
      }
@@ -34867,7 +34978,7 @@ index 64ea4741b7ed58fe7914b9431353abd1f658a935..886883cf81c813e3faac8aae951615e5
      }
  
      public Scoreboard getScoreboard() {
-@@ -59,53 +64,76 @@ public class Objective {
+@@ -58,53 +64,76 @@ public class Objective {
      }
  
      public Component getDisplayName() {
@@ -34888,14 +34999,15 @@ index 64ea4741b7ed58fe7914b9431353abd1f658a935..886883cf81c813e3faac8aae951615e5
      public NumberFormat numberFormatOrDefault(final NumberFormat _default) {
 -        return Objects.requireNonNullElse(this.numberFormat, _default);
 +        return Objects.requireNonNullElse(numberFormat(), _default); // Canvas - region threading
-     }
- 
-     private Component createFormattedDisplayName() {
-+    // Canvas start - region threading
-+        return createFormattedDisplayName(getDisplayName());
 +    }
 +
-+    private Component createFormattedDisplayName(final Component displayName) {
++    // Canvas start - region threading
++    public Component createFormattedDisplayName() {
++        return createFormattedDisplayName(getDisplayName());
+     }
+ 
+-    private Component createFormattedDisplayName() {
++    public Component createFormattedDisplayName(final Component displayName) {
 +    // Canvas end - region threading
          return ComponentUtils.wrapInSquareBrackets(
 -            this.displayName.copy().withStyle(s -> s.withHoverEvent(new HoverEvent.ShowText(Component.literal(this.name))))
@@ -34904,20 +35016,20 @@ index 64ea4741b7ed58fe7914b9431353abd1f658a935..886883cf81c813e3faac8aae951615e5
      }
  
      public Component getFormattedDisplayName() {
--        return this.formattedDisplayName;
+-        return this.lazyFormattedDisplayName != null ? this.lazyFormattedDisplayName : (this.lazyFormattedDisplayName = this.createFormattedDisplayName()); // Paper - Lazy initialization because only used internally by commands
 +        return this.objectiveData.getValue().getFormattedDisplayName(); // Canvas - region threading
      }
  
      public void setDisplayName(final Component name) {
 -        this.displayName = name;
--        this.formattedDisplayName = this.createFormattedDisplayName();
+-        this.lazyFormattedDisplayName = null; // Paper - Lazy initialization because only used internally by commands
 +        // Canvas start - region threading
 +        ensureMainThread("Cannot set display name of objective async");
 +        this.objectiveData.swapValue((data) -> {
 +            final io.canvasmc.canvas.threadedregions.world.scores.ObjectiveData newData =
 +                io.canvasmc.canvas.threadedregions.world.scores.ObjectiveData.copyOf(data);
 +            newData.setDisplayName(name);
-+            newData.setFormattedDisplayName(createFormattedDisplayName(name));
++            newData.setFormattedDisplayName(null);
 +            return newData;
 +        });
 +        // Canvas end - region threading

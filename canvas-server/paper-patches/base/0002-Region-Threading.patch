@@ -1,6 +1,6 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Dueris <duerismc@gmail.com>
-Date: Mon, 5 Oct 2026 09:35:24 -0700
+Date: Mon, 12 Oct 2026 14:21:00 -0700
 Subject: [PATCH] Region Threading
 
 This patch and its contents is comprised of the following:
@@ -1152,6 +1152,19 @@ index 5c40c3d0ea8e1e59d39d5f4da6377309119e784b..58571a07c0cdc6c74ef46005c45ad407
          // Copied from SimplePluginManager#loadPlugins
          // Spigot doesn't validate the name when the config is created, and instead when the plugin is loaded.
          // Paper plugin configuration will do these checks in config serializer instead of when this is created.
+diff --git a/src/main/java/io/papermc/paper/potion/PaperPotionBrewer.java b/src/main/java/io/papermc/paper/potion/PaperPotionBrewer.java
+index 4e998a422c8420134e90f37a77815a8cfd37831d..e9efdefbbda05e751fbc068131a8699f6c48e2bc 100644
+--- a/src/main/java/io/papermc/paper/potion/PaperPotionBrewer.java
++++ b/src/main/java/io/papermc/paper/potion/PaperPotionBrewer.java
+@@ -49,7 +49,7 @@ public class PaperPotionBrewer implements PotionBrewer {
+ 
+     @Override
+     public void resetPotionMixes() {
+-        AsyncCatcher.catchOp("Resetting potion mixes");
++        io.papermc.paper.threadedregions.RegionizedServer.ensureGlobalTickThread("Cannot reset potion mixes async"); // Canvas - region threading
+         final RecipeManager recipeManager = this.server.getRecipeManager();
+         final RegistryAccess registryAccess = this.server.registryAccess();
+ 
 diff --git a/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java b/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java
 index 6f580f7b1708cda1cb63aea6607e369a6d771d1a..2308b6b40fa7c2b66159b5772d794c846cff31c7 100644
 --- a/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java
@@ -1906,10 +1919,10 @@ index c61612e5fd6cb37c8d7816e98065d405b2e74353..99442f7adb64362ee86ce4cb74997241
      public static SoundGroup getSoundGroup(SoundType soundEffectType) {
          return CraftSoundGroup.SOUND_GROUPS.computeIfAbsent(soundEffectType, CraftSoundGroup::new);
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0901af530 100644
+index 562119e379938476206e71e4ab23ce85bbabb0ff..1a5b32e10324064f98d3ff376981a1810348f0c2 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-@@ -238,7 +238,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -240,7 +240,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public int getTickableTileEntityCount() {
@@ -1918,7 +1931,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
      }
  
      @Override
-@@ -308,7 +308,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -310,7 +310,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
          // Paper start - per world spawn limits
          for (SpawnCategory spawnCategory : SpawnCategory.values()) {
              if (CraftSpawnCategory.isValidForLimits(spawnCategory)) {
@@ -1927,7 +1940,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
              }
          }
          // Paper end - per world spawn limits
-@@ -374,6 +374,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -376,6 +376,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public Chunk getChunkAt(int x, int z) {
@@ -1935,7 +1948,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          warnUnsafeChunk("getting a faraway chunk", x, z); // Paper
          net.minecraft.world.level.chunk.LevelChunk chunk = (net.minecraft.world.level.chunk.LevelChunk) this.world.getChunk(x, z, ChunkStatus.FULL, true);
          return new CraftChunk(chunk);
-@@ -404,10 +405,10 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -406,10 +407,10 @@ public class CraftWorld extends CraftRegionAccessor implements World {
      @Override
      public boolean isChunkGenerated(int x, int z) {
          // Paper start - Fix this method
@@ -1948,7 +1961,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          }
          ChunkAccess chunk = world.getChunkSource().getChunkAtImmediately(x, z);
          if (chunk != null) {
-@@ -462,7 +463,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -476,7 +477,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
      }
  
      private boolean unloadChunk0(int x, int z, boolean save) {
@@ -1957,7 +1970,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          if (!this.isChunkLoaded(x, z)) {
              return true;
          }
-@@ -479,6 +480,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -493,6 +494,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public boolean refreshChunk(int x, int z) {
@@ -1965,7 +1978,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          ChunkHolder playerChunk = this.world.getChunkSource().chunkMap.getVisibleChunkIfPresent(ChunkPos.pack(x, z));
          if (playerChunk == null) return false;
  
-@@ -529,7 +531,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -543,7 +545,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public boolean loadChunk(int x, int z, boolean generate) {
@@ -1974,7 +1987,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          warnUnsafeChunk("loading a faraway chunk", x, z); // Paper
          ChunkAccess chunk = this.world.getChunkSource().getChunk(x, z, generate || isChunkGenerated(x, z) ? ChunkStatus.FULL : ChunkStatus.EMPTY, true); // Paper
  
-@@ -569,7 +571,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -583,7 +585,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
          final DistanceManager distanceManager = this.world.getChunkSource().chunkMap.getDistanceManager();
          if (distanceManager.ticketStorage.addPluginRegionTicket(new ChunkPos(x, z), plugin)) {
@@ -1983,7 +1996,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
              return true;
          }
  
-@@ -623,17 +625,20 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -637,17 +639,20 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public boolean isChunkForceLoaded(int x, int z) {
@@ -2004,7 +2017,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          Set<Chunk> chunks = new HashSet<>();
  
          for (long pos : this.getHandle().getForceLoadedChunks()) {
-@@ -742,18 +747,20 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -756,18 +761,20 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public boolean generateTree(Location loc, TreeType type, BlockChangeDelegate delegate) {
@@ -2031,7 +2044,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          }
          if (grownTree) { // Copy block data to delegate
              for (CraftBlockState snapshot : capturedBlockStates) {
-@@ -797,6 +804,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -811,6 +818,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void setTime(long time) {
@@ -2039,7 +2052,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          long margin = (time - this.getFullTime()) % SharedConstants.TICKS_PER_GAME_DAY;
          if (margin < 0) margin += SharedConstants.TICKS_PER_GAME_DAY;
          this.setFullTime(this.getFullTime() + margin);
-@@ -809,6 +817,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -823,6 +831,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void setFullTime(long time) {
@@ -2047,7 +2060,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          if (this.world.dimensionType().defaultClock().isEmpty()) {
              throw new IllegalArgumentException("Cannot set time in world without world clock");
          }
-@@ -833,7 +842,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -847,7 +856,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public long getGameTime() {
@@ -2056,7 +2069,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
      }
  
      @Override
-@@ -844,6 +853,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -858,6 +867,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      private boolean createExplosion(double x, double y, double z, float power, boolean setFire, boolean breakBlocks, Entity source, Consumer<net.minecraft.world.level.ServerExplosion> configurator) {
          // Paper end - expand explosion API
@@ -2064,7 +2077,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          net.minecraft.world.level.Level.ExplosionInteraction explosionType;
          if (!breakBlocks) {
              explosionType = net.minecraft.world.level.Level.ExplosionInteraction.NONE; // Don't break blocks
-@@ -902,6 +912,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -916,6 +926,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public int getHighestBlockYAt(int x, int z, org.bukkit.HeightMap heightMap) {
@@ -2072,7 +2085,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          warnUnsafeChunk("getting a faraway chunk", x >> 4, z >> 4); // Paper
          // Transient load for this tick
          return this.world.getChunk(x >> 4, z >> 4).getHeight(CraftHeightMap.toNMS(heightMap), x, z);
-@@ -917,6 +928,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -931,6 +942,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
      @Override
      public void setBiome(int x, int y, int z, Holder<net.minecraft.world.level.biome.Biome> biome) {
          BlockPos pos = new BlockPos(x, 0, z);
@@ -2080,7 +2093,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          if (this.world.hasChunkAt(pos)) {
              net.minecraft.world.level.chunk.LevelChunk chunk = this.world.getChunkAt(pos);
  
-@@ -1138,12 +1150,13 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1152,12 +1164,13 @@ public class CraftWorld extends CraftRegionAccessor implements World {
      public void save(boolean flush) {
          org.spigotmc.AsyncCatcher.catchOp("world save"); // Spigot
          this.server.checkSaveState();
@@ -2100,7 +2113,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
      }
  
      @Override
-@@ -1187,6 +1200,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1201,6 +1214,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void setStorm(boolean hasStorm) {
@@ -2108,7 +2121,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          this.world.getWeatherData().setRaining(hasStorm, WeatherChangeEvent.Cause.PLUGIN);
          this.setWeatherDuration(0); // Reset weather duration (legacy behaviour)
          this.setClearWeatherDuration(0); // Reset clear weather duration (reset "/weather clear" commands)
-@@ -1199,6 +1213,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1213,6 +1227,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void setWeatherDuration(int duration) {
@@ -2116,7 +2129,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          this.world.getWeatherData().setRainTime(duration);
      }
  
-@@ -1209,6 +1224,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1223,6 +1238,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void setThundering(boolean thundering) {
@@ -2124,7 +2137,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          this.world.getWeatherData().setThundering(thundering, ThunderChangeEvent.Cause.PLUGIN);
          this.setThunderDuration(0); // Reset weather duration (legacy behaviour)
          this.setClearWeatherDuration(0); // Reset clear weather duration (reset "/weather clear" commands)
-@@ -1221,6 +1237,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1235,6 +1251,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void setThunderDuration(int duration) {
@@ -2132,7 +2145,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          this.world.getWeatherData().setThunderTime(duration);
      }
  
-@@ -1231,6 +1248,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1245,6 +1262,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void setClearWeatherDuration(int duration) {
@@ -2140,7 +2153,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          this.world.getWeatherData().setClearWeatherTime(duration);
      }
  
-@@ -1483,11 +1501,13 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1497,11 +1515,13 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void setHardcore(boolean hardcore) {
@@ -2154,7 +2167,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          Preconditions.checkArgument(spawnCategory != null, "SpawnCategory cannot be null");
          Preconditions.checkArgument(CraftSpawnCategory.isValidForLimits(spawnCategory), "SpawnCategory.%s are not supported", spawnCategory);
  
-@@ -1504,21 +1524,25 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1518,21 +1538,25 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void setMetadata(String metadataKey, MetadataValue newMetadataValue) {
@@ -2180,7 +2193,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          this.server.getWorldMetadata().removeMetadata(this, metadataKey, owningPlugin);
      }
  
-@@ -1540,6 +1564,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1554,6 +1578,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void setSpawnLimit(SpawnCategory spawnCategory, int limit) {
@@ -2188,7 +2201,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          Preconditions.checkArgument(spawnCategory != null, "SpawnCategory cannot be null");
          Preconditions.checkArgument(CraftSpawnCategory.isValidForLimits(spawnCategory), "SpawnCategory.%s are not supported", spawnCategory);
  
-@@ -1597,7 +1622,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1611,7 +1636,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
          if (!(entity instanceof CraftEntity craftEntity) || entity.getWorld() != this || sound == null || category == null) return;
  
          ClientboundSoundEntityPacket packet = new ClientboundSoundEntityPacket(CraftSound.bukkitToMinecraftHolder(sound), net.minecraft.sounds.SoundSource.valueOf(category.name()), craftEntity.getHandle(), volume, pitch, seed);
@@ -2197,7 +2210,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          if (entityTracker != null) {
              entityTracker.sendToTrackingPlayersAndSelf(packet);
          }
-@@ -1618,7 +1643,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1632,7 +1657,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
          if (!(entity instanceof CraftEntity craftEntity) || entity.getWorld() != this || sound == null || category == null) return;
  
          ClientboundSoundEntityPacket packet = new ClientboundSoundEntityPacket(Holder.direct(SoundEvent.createVariableRangeEvent(Identifier.parse(sound))), net.minecraft.sounds.SoundSource.valueOf(category.name()), craftEntity.getHandle(), volume, pitch, seed);
@@ -2206,7 +2219,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          if (entityTracker != null) {
              entityTracker.sendToTrackingPlayersAndSelf(packet);
          }
-@@ -1669,6 +1694,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1683,6 +1708,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
      @SuppressWarnings({"unchecked", "rawtypes"})
      @Override
      public boolean setGameRuleValue(String rule, String value) {
@@ -2214,7 +2227,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          // No null values allowed
          if (rule == null || value == null) return false;
  
-@@ -1714,6 +1740,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1728,6 +1754,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public <T> boolean setGameRule(org.bukkit.@NotNull GameRule<T> rule, @NotNull T newValue) {
@@ -2222,7 +2235,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          Preconditions.checkArgument(rule != null, "GameRule cannot be null");
          Preconditions.checkArgument(newValue != null, "GameRule value cannot be null");
  
-@@ -1862,6 +1889,12 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1876,6 +1903,12 @@ public class CraftWorld extends CraftRegionAccessor implements World {
  
      @Override
      public void sendGameEvent(Entity sourceEntity, org.bukkit.GameEvent gameEvent, Vector position) {
@@ -2235,7 +2248,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          getHandle().gameEvent(sourceEntity != null ? ((CraftEntity) sourceEntity).getHandle(): null, net.minecraft.core.registries.BuiltInRegistries.GAME_EVENT.get(org.bukkit.craftbukkit.util.CraftNamespacedKey.toMinecraft(gameEvent.getKey())).orElseThrow(), org.bukkit.craftbukkit.util.CraftVector.toBlockPos(position));
      }
      // Paper end
-@@ -1925,7 +1958,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -1939,7 +1972,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
          Preconditions.checkArgument(radius >= 0, "Radius value (%s) cannot be negative", radius);
  
          Raids persistentRaid = this.world.getRaids();
@@ -2244,7 +2257,7 @@ index 9db1a0be9fc09b0e33ed522a4566468474a5632b..84b3ddd3018e0180aba5f390df684fb0
          return (raid == null) ? null : new CraftRaid(raid, this.world);
      }
  
-@@ -2048,4 +2081,11 @@ public class CraftWorld extends CraftRegionAccessor implements World {
+@@ -2062,4 +2095,11 @@ public class CraftWorld extends CraftRegionAccessor implements World {
          return POINTERS_SUPPLIER.view(this);
      }
      // Paper end
@@ -3199,10 +3212,10 @@ index 000c5ea5d39d5ab6e5592012ab1cc7ee547505dc..ab2ee478c53923be85f5a6d4971bed5b
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index 4dae7488de485dff72cde27ee8be0467d00dffdf..5d26caf640e92257933fe6b99eae32c2bbecc3c8 100644
+index 7f6d86ac286fc46c4b4b56367077419233ce33b4..1d04cf5ba4d05b9317c8be7499e0c75042f3feeb 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-@@ -113,6 +113,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -115,6 +115,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          return this.apiScheduler;
      };
      // Paper end - Folia schedulers
@@ -3214,7 +3227,7 @@ index 4dae7488de485dff72cde27ee8be0467d00dffdf..5d26caf640e92257933fe6b99eae32c2
  
      public CraftEntity(final CraftServer server, final Entity entity) {
          this.server = server;
-@@ -147,6 +152,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -149,6 +154,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
      }
  
      public Entity getHandle() {
@@ -3222,7 +3235,7 @@ index 4dae7488de485dff72cde27ee8be0467d00dffdf..5d26caf640e92257933fe6b99eae32c2
          return this.entity;
      }
  
-@@ -309,6 +315,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -311,6 +317,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
      }
  
      protected boolean teleport0(Location location, TeleportCause cause, TeleportFlag... flags) {
@@ -3234,7 +3247,7 @@ index 4dae7488de485dff72cde27ee8be0467d00dffdf..5d26caf640e92257933fe6b99eae32c2
          Entity entity = this.getHandle();
          if (!entity.isAlive() || !entity.valid) {
              return false;
-@@ -775,7 +786,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -777,7 +788,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          ImmutableSet.Builder<Player> players = ImmutableSet.builder();
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3243,7 +3256,7 @@ index 4dae7488de485dff72cde27ee8be0467d00dffdf..5d26caf640e92257933fe6b99eae32c2
  
          if (entityTracker != null) {
              for (ServerPlayerConnection connection : entityTracker.seenBy) {
-@@ -792,7 +803,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -794,7 +805,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          Preconditions.checkArgument(player != null, "Player cannot be null");
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3252,7 +3265,7 @@ index 4dae7488de485dff72cde27ee8be0467d00dffdf..5d26caf640e92257933fe6b99eae32c2
          if (entityTracker == null) return false;
  
          return entityTracker.seenBy.contains(((CraftPlayer) player).getHandle().connection);
-@@ -1122,7 +1133,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1130,7 +1141,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          }
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3261,7 +3274,7 @@ index 4dae7488de485dff72cde27ee8be0467d00dffdf..5d26caf640e92257933fe6b99eae32c2
  
          if (entityTracker == null) {
              return;
-@@ -1139,7 +1150,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1147,7 +1158,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          }
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3270,7 +3283,7 @@ index 4dae7488de485dff72cde27ee8be0467d00dffdf..5d26caf640e92257933fe6b99eae32c2
  
          if (entityTracker == null) {
              return;
-@@ -1175,27 +1186,81 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1183,27 +1194,81 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          location.checkFinite();
          Location locationClone = location.clone(); // clone so we don't need to worry about mutations after this call.
  
@@ -3370,7 +3383,7 @@ index 4dae7488de485dff72cde27ee8be0467d00dffdf..5d26caf640e92257933fe6b99eae32c2
      // Paper end - more teleport API / async chunk API
  
      private final org.bukkit.entity.Entity.Spigot spigot = new org.bukkit.entity.Entity.Spigot() {
-@@ -1267,8 +1332,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1275,8 +1340,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public Set<org.bukkit.entity.Player> getTrackedPlayers() {
@@ -3771,7 +3784,7 @@ index 32e426513f3e710abeda3363a4e2a08fe902c703..2655d6c0c58c27bd532d13fab723863c
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
-index 8cdec4f9721b0a4959e13e340d35a7b95fbdf3e5..e524249791560971dd24065fcbb20f74fd6f9280 100644
+index e708c17dda72a6e13b57403871a8db6f6109c186..582c13383c82c9cb0aa17d23d6ab24b516f46c0c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
 @@ -116,6 +116,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
@@ -3782,7 +3795,7 @@ index 8cdec4f9721b0a4959e13e340d35a7b95fbdf3e5..e524249791560971dd24065fcbb20f74
          return (net.minecraft.world.entity.LivingEntity) this.entity;
      }
  
-@@ -506,7 +507,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
+@@ -507,7 +508,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
  
      @Override
      public boolean addPotionEffect(PotionEffect effect) {
@@ -4148,7 +4161,7 @@ index 999ccf4acdb50be8a7ef0fe4a7f687508fadcde1..80dafb9ce02b7ac7307eb8ea6fa22a76
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-index f11ad0f2cdbb128dfa1f572903ad1b16b80c3e87..3c08b256070a62ba4b57bae78f9bdbedd091a397 100644
+index f51f05ff0b0b55e5f4ea3b04d9d4616cbdb942f4..3c08b256070a62ba4b57bae78f9bdbedd091a397 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 @@ -241,7 +241,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
@@ -4445,17 +4458,16 @@ index f11ad0f2cdbb128dfa1f572903ad1b16b80c3e87..3c08b256070a62ba4b57bae78f9bdbed
  
          this.server.getScoreboardManager().setPlayerBoard(this, craftScoreboard);
      }
-@@ -3053,8 +3165,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3053,7 +3165,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
          @Override
          public void respawn() {
              if (CraftPlayer.this.getHealth() <= 0 && CraftPlayer.this.isOnline()) {
 -                CraftPlayer.this.server.getServer().getPlayerList().respawn(CraftPlayer.this.getHandle(), false, Entity.RemovalReason.KILLED, org.bukkit.event.player.PlayerRespawnEvent.RespawnReason.PLUGIN);
--                CraftPlayer.this.getHandle().connection.restartClientLoadTimerAfterRespawn();
 +                CraftPlayer.this.getHandle().respawn(null, org.bukkit.event.player.PlayerRespawnEvent.RespawnReason.PLUGIN); // Folia - region threading
              }
          }
  
-@@ -3312,6 +3423,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3311,6 +3423,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public org.bukkit.entity.Entity releaseLeftShoulderEntity() {
@@ -4463,7 +4475,7 @@ index f11ad0f2cdbb128dfa1f572903ad1b16b80c3e87..3c08b256070a62ba4b57bae78f9bdbed
          if (!getHandle().getShoulderEntityLeft().isEmpty()) {
              Entity entity = getHandle().releaseLeftShoulderEntity();
              if (entity != null) {
-@@ -3324,6 +3436,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3323,6 +3436,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public org.bukkit.entity.Entity releaseRightShoulderEntity() {
@@ -4471,7 +4483,7 @@ index f11ad0f2cdbb128dfa1f572903ad1b16b80c3e87..3c08b256070a62ba4b57bae78f9bdbed
          if (!getHandle().getShoulderEntityRight().isEmpty()) {
              Entity entity = getHandle().releaseRightShoulderEntity();
              if (entity != null) {
-@@ -3336,13 +3449,23 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3335,13 +3449,23 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public org.bukkit.entity.Entity getShoulderEntityLeft() {
@@ -4496,7 +4508,7 @@ index f11ad0f2cdbb128dfa1f572903ad1b16b80c3e87..3c08b256070a62ba4b57bae78f9bdbed
              }
          }
  
-@@ -3351,6 +3474,8 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3350,6 +3474,8 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public void setShoulderEntityLeft(org.bukkit.entity.Entity entity) {
@@ -4505,7 +4517,7 @@ index f11ad0f2cdbb128dfa1f572903ad1b16b80c3e87..3c08b256070a62ba4b57bae78f9bdbed
          if (entity != null) {
              Preconditions.checkArgument(((CraftEntity) entity).getHandle().getType().canSerialize(), "Cannot set entity of type %s as a shoulder entity", entity.getType().getKey());
          }
-@@ -3362,13 +3487,23 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3361,13 +3487,23 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public org.bukkit.entity.Entity getShoulderEntityRight() {
@@ -4530,7 +4542,7 @@ index f11ad0f2cdbb128dfa1f572903ad1b16b80c3e87..3c08b256070a62ba4b57bae78f9bdbed
              }
          }
  
-@@ -3377,6 +3512,8 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3376,6 +3512,8 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public void setShoulderEntityRight(org.bukkit.entity.Entity entity) {
@@ -5176,10 +5188,10 @@ index 6ad86ba7abac537b42f8bb43bbb8d984cbbdf052..f6880ff590fdd3e30562a24de00c6a21
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
-index 52b11c40b1f89bdc6f79ac81f968af45492ad56b..e7d33da929359a5866bd101c49e953a2ab8640a4 100644
+index fc04dc08b263a67dc1e363e87f9fce8ede3ed754..aa25e4f179ec4589d9aa0f652dba084f5636d740 100644
 --- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
 +++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
-@@ -934,7 +934,7 @@ public class CraftEventFactory {
+@@ -937,7 +937,7 @@ public class CraftEventFactory {
          return false;
      }
  
@@ -5188,7 +5200,7 @@ index 52b11c40b1f89bdc6f79ac81f968af45492ad56b..e7d33da929359a5866bd101c49e953a2
  
      public static boolean handleBlockSpreadEvent(LevelAccessor level, BlockPos source, BlockPos target, net.minecraft.world.level.block.state.BlockState state, @net.minecraft.world.level.block.Block.UpdateFlags int flags) {
          return handleBlockSpreadEvent(level, source, target, state, flags, false);
-@@ -950,7 +950,7 @@ public class CraftEventFactory {
+@@ -953,7 +953,7 @@ public class CraftEventFactory {
          CraftBlockState snapshot = CraftBlockStates.getBlockState(level, target);
          snapshot.setBlock(state);
  
@@ -5197,7 +5209,7 @@ index 52b11c40b1f89bdc6f79ac81f968af45492ad56b..e7d33da929359a5866bd101c49e953a2
          if (event.callEvent()) {
              boolean result = snapshot.place(flags);
              return !checkSetResult || result;
-@@ -2345,7 +2345,7 @@ public class CraftEventFactory {
+@@ -2402,7 +2402,7 @@ public class CraftEventFactory {
  
      }
  
@@ -5206,7 +5218,7 @@ index 52b11c40b1f89bdc6f79ac81f968af45492ad56b..e7d33da929359a5866bd101c49e953a2
  
      public static boolean callBlockLockCheckEvent(
          BlockEntity blockEntity,
-@@ -2365,7 +2365,7 @@ public class CraftEventFactory {
+@@ -2422,7 +2422,7 @@ public class CraftEventFactory {
              if (event.getResult() == org.bukkit.event.Event.Result.ALLOW) {
                  return true;
              } else if (event.getResult() == org.bukkit.event.Event.Result.DENY || !code.canUnlock(player, event.isUsingCustomKeyItemStack() ? org.bukkit.craftbukkit.inventory.CraftItemStack.asNMSCopy(event.getKeyItem()) : player.getMainHandItem())) {
@@ -5215,7 +5227,7 @@ index 52b11c40b1f89bdc6f79ac81f968af45492ad56b..e7d33da929359a5866bd101c49e953a2
                  return false;
              }
          }
-@@ -2373,9 +2373,11 @@ public class CraftEventFactory {
+@@ -2430,9 +2430,11 @@ public class CraftEventFactory {
      }
  
      public static boolean sendChestLockedNotifications(Vec3 pos) {
