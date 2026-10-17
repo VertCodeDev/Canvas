@@ -435,6 +435,29 @@ public class WorldConfig extends Part {
         }
         // Canvas end - ColorGens chunk entity limit
 
+        // Canvas start - ColorGens item stacking
+        {
+            option("itemStacking")
+                .docs(
+                    "Merges identical dropped items into one entity whatever their maximum stack size, boats and",
+                    "tools included. What does not fit in the entity's stack is carried as a reserve and handed out",
+                    "on pickup, and the total is shown above it. Changes apply on \"/canvas reload\""
+                );
+        }
+
+        public ItemStacking itemStacking = new ItemStacking();
+        public static class ItemStacking extends Part {
+
+            {
+                option("enabled").docs("Whether identical dropped items stack past their maximum stack size");
+                option("labelRefreshTicks").docs("The least ticks between two updates of the amount shown above a stack");
+            }
+
+            public boolean enabled = false;
+            public int labelRefreshTicks = 20;
+        }
+        // Canvas end - ColorGens item stacking
+
         public Projectiles projectiles = new Projectiles();
         public static class Projectiles extends Part {
 

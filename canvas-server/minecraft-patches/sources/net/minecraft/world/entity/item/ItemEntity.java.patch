@@ -1,6 +1,22 @@
 --- a/net/minecraft/world/entity/item/ItemEntity.java
 +++ b/net/minecraft/world/entity/item/ItemEntity.java
-@@ -199,7 +_,7 @@
+@@ -39,6 +_,15 @@
+ 
+ public class ItemEntity extends Entity implements TraceableEntity {
+     private static final EntityDataAccessor<ItemStack> DATA_ITEM = SynchedEntityData.defineId(ItemEntity.class, EntityDataSerializers.ITEM_STACK);
++    // Canvas start - ColorGens item stacking
++    // The items this entity carries beyond its stack, and one of them to fill the stack from.
++    private long stackReserve;
++    private ItemStack stackTemplate = ItemStack.EMPTY;
++    // Whether the custom name is the amount label, which a name somebody else gave is never.
++    private boolean stackLabelled;
++    private boolean stackLabelDirty;
++    private int stackLabelTick = Integer.MIN_VALUE;
++    // Canvas end - ColorGens item stacking
+     private static final float FLOAT_HEIGHT = 0.1F;
+     public static final float EYE_HEIGHT = 0.2125F;
+     private static final int LIFETIME = 6000;
+@@ -199,11 +_,23 @@
              boolean moved = Mth.floor(this.xo) != Mth.floor(this.getX())
                  || Mth.floor(this.yo) != Mth.floor(this.getY())
                  || Mth.floor(this.zo) != Mth.floor(this.getZ());
@@ -8,6 +24,22 @@
 +            int rate = moved && !level().canvasConfig().entities.itemEntities.itemEntitiesWaitTwoSecondsForMergeCheckAlways ? 2 : 40; // Canvas - item entity wait 2s for merge check config
              if (this.tickCount % rate == 0 && !this.level().isClientSide() && this.isMergable()) {
                  this.mergeWithNeighbours();
+             }
+ 
++            // Canvas start - ColorGens item stacking
++            if (!this.level().isClientSide() && this.isAlive()) {
++                if (this.stackReserve > 0L) {
++                    this.refillStack();
++                }
++
++                if (this.stackLabelDirty) {
++                    this.updateStackLabel();
++                }
++            }
++            // Canvas end - ColorGens item stacking
++
+             if (this.age != -32768) {
+                 this.age++;
              }
 @@ -261,7 +_,7 @@
                      }
@@ -18,6 +50,147 @@
                          break;
                      }
                  }
+@@ -271,12 +_,23 @@
+ 
+     private boolean isMergable() {
+         ItemStack item = this.getItem();
+-        return this.isAlive() && this.pickupDelay != 32767 && this.age != -32768 && this.age < this.despawnRate && item.getCount() < item.getMaxStackSize(); // Paper - Alternative item-despawn-rate
++        return this.isAlive() && this.pickupDelay != 32767 && this.age != -32768 && this.age < this.despawnRate && (item.getCount() < item.getMaxStackSize() || this.stacks()); // Paper - Alternative item-despawn-rate // Canvas - ColorGens item stacking
+     }
+ 
+     private void tryToMerge(final ItemEntity other) {
+         ItemStack thisItemStack = this.getItem();
+         ItemStack otherItemStack = other.getItem();
++        // Canvas start - ColorGens item stacking
++        if (this.stacks() && Objects.equals(this.target, other.target) && ItemStack.isSameItemSameComponents(thisItemStack, otherItemStack)) {
++            if (other.getStackedAmount() < this.getStackedAmount()) {
++                stack(this, other);
++            } else {
++                stack(other, this);
++            }
++
++            return;
++        }
++        // Canvas end - ColorGens item stacking
+         if (Objects.equals(this.target, other.target) && areMergable(thisItemStack, otherItemStack)) {
+             if (otherItemStack.getCount() < thisItemStack.getCount()) {
+                 merge(this, thisItemStack, other, otherItemStack);
+@@ -286,6 +_,115 @@
+         }
+     }
+ 
++    // Canvas start - ColorGens item stacking
++    private boolean stacks() {
++        return this.level() instanceof net.minecraft.server.level.ServerLevel level && io.canvasmc.canvas.entity.StackedItems.enabled(level);
++    }
++
++    private static void stack(final ItemEntity toItem, final ItemEntity fromItem) {
++        if (!org.bukkit.craftbukkit.event.CraftEventFactory.callItemMergeEvent(fromItem, toItem)) {
++            return;
++        }
++
++        long total = toItem.getStackedAmount() + fromItem.getStackedAmount();
++        toItem.setStackedAmount(total < 0L ? Long.MAX_VALUE : total);
++        toItem.pickupDelay = Math.max(toItem.pickupDelay, fromItem.pickupDelay);
++        toItem.age = Math.min(toItem.age, fromItem.age);
++        fromItem.stackReserve = 0L;
++        fromItem.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.MERGE);
++    }
++
++    /**
++     * @return the items this entity carries: its stack and its reserve together
++     */
++    public long getStackedAmount() {
++        return this.getItem().getCount() + this.stackReserve;
++    }
++
++    /**
++     * Sets how many items this entity carries. What does not fit in its stack becomes the reserve.
++     *
++     * @param amount the amount, at least one
++     */
++    public void setStackedAmount(final long amount) {
++        ItemStack current = this.getItem();
++        if (!current.isEmpty()) {
++            this.stackTemplate = current.copyWithCount(1);
++        }
++
++        if (this.stackTemplate.isEmpty() || amount < 1L) {
++            return;
++        }
++
++        int visible = (int) Math.min(this.stackTemplate.getMaxStackSize(), amount);
++        this.stackReserve = amount - visible;
++        if (current.isEmpty() || current.getCount() != visible) {
++            this.setItem(this.stackTemplate.copyWithCount(visible));
++        }
++
++        this.stackLabelDirty = true;
++    }
++
++    // Fills the stack up from the reserve after some of it was taken. Answers whether the entity
++    // still carries items, so a pickup that emptied the stack keeps it instead of discarding it.
++    private boolean refillStack() {
++        if (this.stackReserve <= 0L || this.stackTemplate.isEmpty()) {
++            return false;
++        }
++
++        ItemStack current = this.getItem();
++        int max = this.stackTemplate.getMaxStackSize();
++        int have = current.isEmpty() ? 0 : current.getCount();
++        if (have >= max) {
++            return true;
++        }
++
++        int added = (int) Math.min(max - have, this.stackReserve);
++        this.stackReserve -= added;
++        this.setItem(this.stackTemplate.copyWithCount(have + added));
++        this.stackLabelDirty = true;
++        return true;
++    }
++
++    // The amount above the entity, sent at most once per label-refresh-ticks and only when it reads
++    // differently: the name is all that changes, never the stack, which stays full while there is a reserve.
++    private void updateStackLabel() {
++        int every = this.level() instanceof net.minecraft.server.level.ServerLevel level ? Math.max(1, level.canvasConfig().entities.itemStacking.labelRefreshTicks) : 20;
++        if (this.tickCount - this.stackLabelTick < every) {
++            return;
++        }
++
++        this.stackLabelDirty = false;
++        this.stackLabelTick = this.tickCount;
++        if (this.stackReserve > 0L) {
++            if (!this.stackLabelled && this.getCustomName() != null) {
++                return;
++            }
++
++            this.setCustomName(io.canvasmc.canvas.entity.StackedItems.label(this.getItem(), this.getStackedAmount()));
++            this.setCustomNameVisible(true);
++            this.stackLabelled = true;
++        } else if (this.stackLabelled) {
++            this.setCustomName(null);
++            this.setCustomNameVisible(false);
++            this.stackLabelled = false;
++        }
++    }
++
++    /**
++     * Hands the entity's stack to a hopper or container and fills it up again from the reserve, or
++     * discards the entity once nothing is left.
++     *
++     * @param cause why the stack was taken
++     */
++    public void takeStackOrDiscard(final org.bukkit.event.entity.EntityRemoveEvent.Cause cause) {
++        this.setItem(ItemStack.EMPTY);
++        if (!this.refillStack()) {
++            this.discard(cause);
++        }
++    }
++    // Canvas end - ColorGens item stacking
++
+     public static boolean areMergable(final ItemStack thisItemStack, final ItemStack otherItemStack) {
+         return otherItemStack.getCount() + thisItemStack.getCount() <= otherItemStack.getMaxStackSize()
+             && ItemStack.isSameItemSameComponents(thisItemStack, otherItemStack);
 @@ -322,6 +_,15 @@
          return !this.getItem().canBeHurtBy(this.damageSources().inFire()) || super.fireImmune();
      }
@@ -34,6 +207,60 @@
      @Override
      protected boolean shouldPlayLavaHurtSound() {
          return this.health <= 0 || this.tickCount % 10 == 0;
+@@ -377,6 +_,12 @@
+         if (!this.getItem().isEmpty()) {
+             output.store("Item", ItemStack.CODEC, this.getItem());
+         }
++        // Canvas start - ColorGens item stacking
++        if (this.stackReserve > 0L) {
++            output.putLong("Canvas.StackReserve", this.stackReserve);
++            output.putBoolean("Canvas.StackLabelled", this.stackLabelled);
++        }
++        // Canvas end - ColorGens item stacking
+         // Paper start - Friction API
+         if (this.frictionState != net.kyori.adventure.util.TriState.NOT_SET) {
+             output.putString("Paper.FrictionState", this.frictionState.toString());
+@@ -392,6 +_,16 @@
+         this.target = input.read("Owner", UUIDUtil.CODEC).orElse(null);
+         this.thrower = EntityReference.read(input, "Thrower");
+         this.setItem(input.read("Item", ItemStack.CODEC).orElse(ItemStack.EMPTY));
++        // Canvas start - ColorGens item stacking
++        this.stackReserve = Math.max(0L, input.getLongOr("Canvas.StackReserve", 0L));
++        this.stackLabelled = input.getBooleanOr("Canvas.StackLabelled", false);
++        if (this.stackReserve > 0L && !this.getItem().isEmpty()) {
++            this.stackTemplate = this.getItem().copyWithCount(1);
++            this.stackLabelDirty = true;
++        } else {
++            this.stackReserve = 0L;
++        }
++        // Canvas end - ColorGens item stacking
+         // Paper start - Friction API
+         input.getString("Paper.FrictionState").ifPresent(frictionState -> {
+             try {
+@@ -476,8 +_,9 @@
+             // Paper end - PlayerAttemptPickupItemEvent
+             if (this.pickupDelay == 0 && (this.target == null || this.target.equals(player.getUUID())) && player.getInventory().add(itemStack)) {
+                 if (flyAtPlayer) // Paper - PlayerPickupItemEvent
+-                player.take(this, orgCount);
++                player.take(this, this.stackReserve > 0L ? Math.max(0, orgCount - 1) : orgCount); // Canvas - ColorGens item stacking - a client removes an item it was told it took all of, so one stays until the refill arrives
+                 if (itemStack.isEmpty()) {
++                    if (!this.refillStack()) // Canvas - ColorGens item stacking - a stack with a reserve fills up again
+                     this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.PICKUP); // CraftBukkit - add Bukkit remove cause
+                     itemStack.setCount(orgCount);
+                 }
+@@ -525,6 +_,12 @@
+     }
+ 
+     public void setItem(final ItemStack itemStack) {
++        // Canvas start - ColorGens item stacking - a different item does not inherit the reserve of the last one
++        if (this.stackReserve > 0L && !itemStack.isEmpty() && !ItemStack.isSameItemSameComponents(itemStack, this.stackTemplate)) {
++            this.stackReserve = 0L;
++            this.stackLabelDirty = true;
++        }
++        // Canvas end - ColorGens item stacking
+         this.getEntityData().set(DATA_ITEM, itemStack);
+         this.despawnRate = this.level().paperConfig().entities.spawning.altItemDespawnRate.enabled ? this.level().paperConfig().entities.spawning.altItemDespawnRate.items.getOrDefault(itemStack.getItem(), this.level().spigotConfig.itemDespawnRate) : this.level().spigotConfig.itemDespawnRate; // Paper - Alternative item-despawn-rate
+     }
 @@ -597,4 +_,13 @@
      public MoveSimulationType getMoveSimulationType() {
          return MoveSimulationType.SERVER_AND_CLIENT;

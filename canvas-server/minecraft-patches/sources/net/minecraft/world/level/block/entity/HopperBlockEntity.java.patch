@@ -160,6 +160,16 @@
          int[] slots = getSlots(container, direction);
  
          for (int slot : slots) {
+@@ -551,8 +_,7 @@
+         ItemStack result = addItem(null, container, copy, null);
+         if (result.isEmpty()) {
+             changed = true;
+-            entity.setItem(ItemStack.EMPTY);
+-            entity.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.PICKUP); // CraftBukkit - add Bukkit remove cause
++            entity.takeStackOrDiscard(org.bukkit.event.entity.EntityRemoveEvent.Cause.PICKUP); // CraftBukkit - add Bukkit remove cause // Canvas - ColorGens item stacking - a stack with a reserve fills up again
+         } else {
+             entity.setItem(result);
+         }
 @@ -707,7 +_,7 @@
          final boolean optimizeEntities
      ) {

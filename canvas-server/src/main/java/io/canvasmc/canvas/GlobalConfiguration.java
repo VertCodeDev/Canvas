@@ -74,6 +74,7 @@ public class GlobalConfiguration extends Part {
 
     public static void init() {
         // no-op, just for static load from reload()
+        io.canvasmc.canvas.entity.StackedItems.install(); // Canvas - ColorGens item stacking
     }
 
     public static void reload() {
