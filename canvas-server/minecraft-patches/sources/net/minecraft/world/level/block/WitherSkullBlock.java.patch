@@ -1,0 +1,19 @@
+--- a/net/minecraft/world/level/block/WitherSkullBlock.java
++++ b/net/minecraft/world/level/block/WitherSkullBlock.java
+@@ -48,7 +_,7 @@
+         if (!level.isClientSide()) {
+             BlockState blockState = placedSkull.getBlockState();
+             boolean correctBlock = blockState.is(Blocks.WITHER_SKELETON_SKULL) || blockState.is(Blocks.WITHER_SKELETON_WALL_SKULL);
+-            if (correctBlock && pos.getY() >= level.getMinY() && level.getDifficulty() != Difficulty.PEACEFUL) {
++            if (correctBlock && pos.getY() >= level.getMinY() && level.getDifficulty() != Difficulty.PEACEFUL && level.canvasConfig().entities.mobBuilding.withers) { // Canvas - ColorGens mob building
+                 BlockPattern.BlockPatternMatch match = getOrCreateWitherFull().find(level, pos);
+                 if (match != null) {
+                     WitherBoss witherBoss = EntityTypes.WITHER.create(level, EntitySpawnReason.TRIGGERED);
+@@ -93,6 +_,7 @@
+             && pos.getY() >= level.getMinY() + 2
+             && level.getDifficulty() != Difficulty.PEACEFUL
+             && !level.isClientSide()
++            && level.canvasConfig().entities.mobBuilding.withers // Canvas - ColorGens mob building
+             && getOrCreateWitherBase().find(level, pos) != null;
+     }
+ 

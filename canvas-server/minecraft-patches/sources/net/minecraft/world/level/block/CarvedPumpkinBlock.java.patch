@@ -1,0 +1,40 @@
+--- a/net/minecraft/world/level/block/CarvedPumpkinBlock.java
++++ b/net/minecraft/world/level/block/CarvedPumpkinBlock.java
+@@ -50,13 +_,15 @@
+     }
+ 
+     public boolean canSpawnGolem(final LevelReader level, final BlockPos topPos) {
+-        return this.getOrCreateSnowGolemBase().find(level, topPos) != null
+-            || this.getOrCreateIronGolemBase().find(level, topPos) != null
+-            || this.getOrCreateCopperGolemBase().find(level, topPos) != null;
++        io.canvasmc.canvas.WorldConfig.Entities.MobBuilding creation = level instanceof Level world ? world.canvasConfig().entities.mobBuilding : null; // Canvas - ColorGens mob building
++        return (creation == null || creation.snowGolems) && this.getOrCreateSnowGolemBase().find(level, topPos) != null // Canvas - ColorGens mob building
++            || (creation == null || creation.ironGolems) && this.getOrCreateIronGolemBase().find(level, topPos) != null // Canvas - ColorGens mob building
++            || (creation == null || creation.copperGolems) && this.getOrCreateCopperGolemBase().find(level, topPos) != null; // Canvas - ColorGens mob building
+     }
+ 
+     private void trySpawnGolem(final Level level, final BlockPos topPos) {
+-        BlockPattern.BlockPatternMatch snowGolemMatch = this.getOrCreateSnowGolemFull().find(level, topPos);
++        io.canvasmc.canvas.WorldConfig.Entities.MobBuilding creation = level.canvasConfig().entities.mobBuilding; // Canvas - ColorGens mob building
++        BlockPattern.BlockPatternMatch snowGolemMatch = creation.snowGolems ? this.getOrCreateSnowGolemFull().find(level, topPos) : null; // Canvas - ColorGens mob building
+         if (snowGolemMatch != null) {
+             SnowGolem snowGolem = EntityTypes.SNOW_GOLEM.create(level, EntitySpawnReason.TRIGGERED);
+             if (snowGolem != null) {
+@@ -65,7 +_,7 @@
+             }
+         }
+ 
+-        BlockPattern.BlockPatternMatch ironGolemMatch = this.getOrCreateIronGolemFull().find(level, topPos);
++        BlockPattern.BlockPatternMatch ironGolemMatch = creation.ironGolems ? this.getOrCreateIronGolemFull().find(level, topPos) : null; // Canvas - ColorGens mob building
+         if (ironGolemMatch != null) {
+             IronGolem ironGolem = EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.TRIGGERED);
+             if (ironGolem != null) {
+@@ -75,7 +_,7 @@
+             }
+         }
+ 
+-        BlockPattern.BlockPatternMatch copperGolemMatch = this.getOrCreateCopperGolemFull().find(level, topPos);
++        BlockPattern.BlockPatternMatch copperGolemMatch = creation.copperGolems ? this.getOrCreateCopperGolemFull().find(level, topPos) : null; // Canvas - ColorGens mob building
+         if (copperGolemMatch != null) {
+             CopperGolem copperGolem = EntityTypes.COPPER_GOLEM.create(level, EntitySpawnReason.TRIGGERED);
+             if (copperGolem != null) {

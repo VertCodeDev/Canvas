@@ -458,6 +458,30 @@ public class WorldConfig extends Part {
         }
         // Canvas end - ColorGens item stacking
 
+        // Canvas start - ColorGens mob building
+        {
+            option("mobBuilding")
+                .docs(
+                    "Which mobs players may build from blocks and a head: golems with a carved pumpkin, the wither",
+                    "with wither skeleton skulls. A mob switched off is never built, by hand or by a dispenser, and",
+                    "its blocks stay as they are. Changes apply on \"/canvas reload\""
+                );
+        }
+
+        public MobBuilding mobBuilding = new MobBuilding();
+        public static class MobBuilding extends Part {
+
+            @Undocumented("Doesn't require docs.")
+            public boolean snowGolems = true;
+            @Undocumented("Doesn't require docs.")
+            public boolean ironGolems = true;
+            @Undocumented("Doesn't require docs.")
+            public boolean copperGolems = true;
+            @Undocumented("Doesn't require docs.")
+            public boolean withers = true;
+        }
+        // Canvas end - ColorGens mob building
+
         public Projectiles projectiles = new Projectiles();
         public static class Projectiles extends Part {
 
