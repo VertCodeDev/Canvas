@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/item/ItemEntity.java
 +++ b/net/minecraft/world/entity/item/ItemEntity.java
-@@ -39,6 +_,15 @@
+@@ -39,6 +_,16 @@
  
  public class ItemEntity extends Entity implements TraceableEntity {
      private static final EntityDataAccessor<ItemStack> DATA_ITEM = SynchedEntityData.defineId(ItemEntity.class, EntityDataSerializers.ITEM_STACK);
@@ -12,11 +12,12 @@
 +    private boolean stackLabelled;
 +    private boolean stackLabelDirty;
 +    private int stackLabelTick = Integer.MIN_VALUE;
++    private long stackLabelShown;
 +    // Canvas end - ColorGens item stacking
      private static final float FLOAT_HEIGHT = 0.1F;
      public static final float EYE_HEIGHT = 0.2125F;
      private static final int LIFETIME = 6000;
-@@ -199,11 +_,23 @@
+@@ -199,11 +_,26 @@
              boolean moved = Mth.floor(this.xo) != Mth.floor(this.getX())
                  || Mth.floor(this.yo) != Mth.floor(this.getY())
                  || Mth.floor(this.zo) != Mth.floor(this.getZ());
@@ -32,7 +33,10 @@
 +                    this.refillStack();
 +                }
 +
-+                if (this.stackLabelDirty) {
++                // A count can change in place, by a pickup that took part of the stack, so the
++                // amount itself is compared too.
++                if (this.stackLabelDirty || this.stackLabelled && this.getStackedAmount() != this.stackLabelShown
++                    || !this.stackLabelled && this.getItem().getCount() > 1 && this.getCustomName() == null && this.stacks()) {
 +                    this.updateStackLabel();
 +                }
 +            }
@@ -75,7 +79,7 @@
          if (Objects.equals(this.target, other.target) && areMergable(thisItemStack, otherItemStack)) {
              if (otherItemStack.getCount() < thisItemStack.getCount()) {
                  merge(this, thisItemStack, other, otherItemStack);
-@@ -286,6 +_,115 @@
+@@ -286,6 +_,120 @@
          }
      }
  
@@ -159,14 +163,19 @@
 +
 +        this.stackLabelDirty = false;
 +        this.stackLabelTick = this.tickCount;
-+        if (this.stackReserve > 0L) {
++        long amount = this.getStackedAmount();
++        if (amount > 1L && this.stacks()) {
 +            if (!this.stackLabelled && this.getCustomName() != null) {
 +                return;
 +            }
 +
-+            this.setCustomName(io.canvasmc.canvas.entity.StackedItems.label(this.getItem(), this.getStackedAmount()));
-+            this.setCustomNameVisible(true);
++            if (!this.stackLabelled || amount != this.stackLabelShown) {
++                this.setCustomName(io.canvasmc.canvas.entity.StackedItems.label(this.getItem(), amount));
++                this.setCustomNameVisible(true);
++            }
++
 +            this.stackLabelled = true;
++            this.stackLabelShown = amount;
 +        } else if (this.stackLabelled) {
 +            this.setCustomName(null);
 +            this.setCustomNameVisible(false);
@@ -207,14 +216,17 @@
      @Override
      protected boolean shouldPlayLavaHurtSound() {
          return this.health <= 0 || this.tickCount % 10 == 0;
-@@ -377,6 +_,12 @@
+@@ -377,6 +_,15 @@
          if (!this.getItem().isEmpty()) {
              output.store("Item", ItemStack.CODEC, this.getItem());
          }
 +        // Canvas start - ColorGens item stacking
 +        if (this.stackReserve > 0L) {
 +            output.putLong("Canvas.StackReserve", this.stackReserve);
-+            output.putBoolean("Canvas.StackLabelled", this.stackLabelled);
++        }
++
++        if (this.stackLabelled) {
++            output.putBoolean("Canvas.StackLabelled", true);
 +        }
 +        // Canvas end - ColorGens item stacking
          // Paper start - Friction API
