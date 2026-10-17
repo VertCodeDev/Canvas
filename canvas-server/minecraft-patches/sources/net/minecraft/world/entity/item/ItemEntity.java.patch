@@ -79,7 +79,7 @@
          if (Objects.equals(this.target, other.target) && areMergable(thisItemStack, otherItemStack)) {
              if (otherItemStack.getCount() < thisItemStack.getCount()) {
                  merge(this, thisItemStack, other, otherItemStack);
-@@ -286,6 +_,120 @@
+@@ -286,6 +_,122 @@
          }
      }
  
@@ -157,7 +157,9 @@
 +    // differently: the name is all that changes, never the stack, which stays full while there is a reserve.
 +    private void updateStackLabel() {
 +        int every = this.level() instanceof net.minecraft.server.level.ServerLevel level ? Math.max(1, level.canvasConfig().entities.itemStacking.labelRefreshTicks) : 20;
-+        if (this.tickCount - this.stackLabelTick < every) {
++        // Widened to long: the first update starts from Integer.MIN_VALUE, which overflowed an int
++        // subtraction into a negative gap that never reached the refresh rate.
++        if ((long) this.tickCount - this.stackLabelTick < every) {
 +            return;
 +        }
 +
