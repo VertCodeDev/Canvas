@@ -19,7 +19,7 @@
  
              // call mid-tick tasks for chunk system
              if ((i & 7) == 0) {
-@@ -533,6 +_,25 @@
+@@ -533,6 +_,27 @@
          int chunkCount = this.distanceManager.getNaturalSpawnChunkCount();
          // Paper start - Optional per player mob spawns
          NaturalSpawner.SpawnState spawnCookie;

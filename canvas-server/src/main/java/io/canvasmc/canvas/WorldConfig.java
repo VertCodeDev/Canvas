@@ -395,6 +395,46 @@ public class WorldConfig extends Part {
             }
         }
 
+        // Canvas start - ColorGens chunk entity limit
+        {
+            option("chunkEntityLimit")
+                .docs(
+                    "Caps how many entities of a kind one chunk may hold. When a new entity takes a chunk over its",
+                    "limit, the oldest of that kind there, the ones that have been there the longest, are removed",
+                    "until it is back at the limit. Players are never touched. Changes apply on \"/canvas reload\""
+                );
+        }
+
+        public ChunkEntityLimit chunkEntityLimit = new ChunkEntityLimit();
+        public static class ChunkEntityLimit extends Part {
+
+            {
+                option("enabled").docs("Whether the limit is on at all");
+                option("maxItems").docs("Dropped items one chunk may hold, 0 for no limit");
+                option("maxExperienceOrbs").docs("Experience orbs one chunk may hold, 0 for no limit");
+                option("maxOtherEntities")
+                    .docs(
+                        "Every other entity one chunk may hold, counted together, 0 for no limit. Players, tamed,",
+                        "leashed and ridden mobs, armor stands, item frames, paintings, displays, interactions and",
+                        "markers are never counted nor removed, so holograms and NPCs stay"
+                    );
+                option("skipNamed")
+                    .docs(
+                        "Never count nor remove an entity with a custom name, such as a labelled pile of drops",
+                        "or a named mob"
+                    );
+                option("log").docs("Log every clear with the chunk and how many were removed");
+            }
+
+            public boolean enabled = false;
+            public int maxItems = 1000;
+            public int maxExperienceOrbs = 300;
+            public int maxOtherEntities = 0;
+            public boolean skipNamed = true;
+            public boolean log = true;
+        }
+        // Canvas end - ColorGens chunk entity limit
+
         public Projectiles projectiles = new Projectiles();
         public static class Projectiles extends Part {
 

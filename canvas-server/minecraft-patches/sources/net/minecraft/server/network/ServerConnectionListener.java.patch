@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/network/ServerConnectionListener.java
 +++ b/net/minecraft/server/network/ServerConnectionListener.java
-@@ -88,7 +_,7 @@
+@@ -89,7 +_,7 @@
                                      } catch (ChannelException var5) {
                                      }
  
