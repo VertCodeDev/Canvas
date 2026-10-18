@@ -27,6 +27,24 @@
              this.vanilla = vanilla;
          }
          return vanilla;
+@@ -57,6 +_,17 @@
+         return this.deepConverted().getSiblings();
+     }
+ 
++    // Canvas start - ask the adventure component whether it is plain text instead of converting it
++    // The network codec asks this of every component it writes, and the default reads the
++    // siblings, which converts the whole component, only for the codec to write the adventure
++    // component itself straight after. A text component with no children and no style is the
++    // only kind the conversion turns into plain text.
++    @Override
++    public @Nullable String tryCollapseToString() {
++        return this.adventure instanceof TextComponent text && text.children().isEmpty() && text.style().isEmpty() ? text.content() : null;
++    }
++    // Canvas end
++
+     @Override
+     public MutableComponent plainCopy() {
+         return this.deepConverted().plainCopy();
 @@ -83,6 +_,7 @@
  
      @Override
