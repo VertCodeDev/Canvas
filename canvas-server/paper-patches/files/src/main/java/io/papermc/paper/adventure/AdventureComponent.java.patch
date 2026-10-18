@@ -1,5 +1,32 @@
 --- a/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
 +++ b/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
+@@ -20,10 +_,25 @@
+         this.adventure = adventure;
+     }
+ 
++    // Canvas start - convert one adventure component once for everybody it is sent to
++    // A wrapper is made per packet, so a boss bar title or a broadcast sent to every player was
++    // converted once per player, on the network threads, through json and the component codec.
++    // Adventure components cannot change, so the same instance always converts to the same
++    // result. Keys are held weakly and by identity, so nothing is hashed deep and nothing stays.
++    private static final com.google.common.cache.Cache<Component, net.minecraft.network.chat.Component> CONVERTED =
++        com.google.common.cache.CacheBuilder.newBuilder().weakKeys().maximumSize(8192).concurrencyLevel(16).build();
++    // Canvas end
++
+     public net.minecraft.network.chat.Component deepConverted() {
+         net.minecraft.network.chat.Component vanilla = this.vanilla;
+         if (vanilla == null) {
+-            vanilla = PaperAdventure.WRAPPER_AWARE_SERIALIZER.serialize(this.adventure);
++            // Canvas start - convert one adventure component once for everybody it is sent to
++            vanilla = CONVERTED.getIfPresent(this.adventure);
++            if (vanilla == null) {
++                vanilla = PaperAdventure.WRAPPER_AWARE_SERIALIZER.serialize(this.adventure);
++                CONVERTED.put(this.adventure, vanilla);
++            }
++            // Canvas end
+             this.vanilla = vanilla;
+         }
+         return vanilla;
 @@ -83,6 +_,7 @@
  
      @Override
