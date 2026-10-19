@@ -1,5 +1,18 @@
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -2158,6 +_,12 @@
+     // Paper end
+ 
+     public void onEntityRemove(Entity entity) {
++        // Canvas start - skip players with nothing hidden
++        // Called for every online player on every entity removal, and almost nobody has anything hidden
++        if (this.invertedVisibilityEntities.isEmpty()) {
++            return;
++        }
++        // Canvas end - skip players with nothing hidden
+         this.invertedVisibilityEntities.remove(entity.getUUID());
+     }
+ 
 @@ -2175,8 +_,20 @@
  
      @Override
