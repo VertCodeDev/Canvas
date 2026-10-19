@@ -75,6 +75,38 @@
  
      public void setListenerForServerboundHandshake(final PacketListener packetListener) {
          if (this.packetListener != null) {
+@@ -539,6 +_,31 @@
+         }
+     }
+ 
++    // Canvas start - one event loop task per drain
++    // Called off the event loop with packets taken from the queue in order. Each packet is still written with its
++    // own listener, and the channel is flushed once after the last one if any of them asked for a flush.
++    private void sendPackets(final java.util.List<PacketSendAction> sends) {
++        if (sends.size() == 1) {
++            final PacketSendAction send = sends.getFirst();
++            this.sendPacket(send.packet, send.listener, send.flush);
++            return;
++        }
++
++        this.sentPackets += sends.size();
++        this.channel.eventLoop().execute(() -> {
++            boolean flush = false;
++            for (final PacketSendAction send : sends) {
++                this.doSendPacket(send.packet, send.listener, false);
++                flush |= send.flush;
++            }
++
++            if (flush) {
++                this.channel.flush();
++            }
++        });
++    }
++    // Canvas end - one event loop task per drain
++
+     private void doSendPacket(final Packet<?> packet, final @Nullable ChannelFutureListener listener, final boolean flush) {
+         // Paper start - Optimize network
+         final net.minecraft.server.level.ServerPlayer player = this.getPlayer();
 @@ -603,7 +_,7 @@
      }
  
@@ -84,7 +116,14 @@
      }
  
      // Folia end - region threading - connection fixes
-@@ -628,7 +_,7 @@
+@@ -625,18 +_,45 @@
+                     queue = (ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue<WrappedConsumer>)this.pendingActions;
+ 
+                 WrappedConsumer holder;
++                // Canvas start - one event loop task per drain
++                final boolean inEventLoop = this.channel.eventLoop().inEventLoop();
++                java.util.List<PacketSendAction> sends = null;
++                // Canvas end - one event loop task per drain
                  for (;;) {
                      // synchronise so that queue clears appear atomic
                      synchronized (queue) {
@@ -93,6 +132,37 @@
                      }
                      if (holder == null) {
                          break;
+                     }
+ 
++                    // Canvas start - one event loop task per drain
++                    // Packets in a row are handed to the event loop together. Anything else, such as a protocol
++                    // switch or a scheduled netty task, first hands over the packets before it, so the order holds.
++                    if (!inEventLoop && holder instanceof PacketSendAction send) {
++                        if (sends == null) {
++                            sends = new java.util.ArrayList<>();
++                        }
++                        sends.add(send);
++                        continue;
++                    }
++
++                    if (sends != null) {
++                        this.sendPackets(sends);
++                        sends = null;
++                    }
++                    // Canvas end - one event loop task per drain
++
+                     holder.accept(this);
+                 }
+ 
++                // Canvas start - one event loop task per drain
++                if (sends != null) {
++                    this.sendPackets(sends);
++                }
++                // Canvas end - one event loop task per drain
++
+             } finally {
+                 if (set) {
+                     this.flushingQueue.set(false);
 @@ -743,8 +_,8 @@
          }
  
@@ -104,3 +174,22 @@
          }
          this.becomeActive = true; // Folia - region threading
      }
+@@ -1100,10 +_,18 @@
+ 
+     private static final class PacketSendAction extends WrappedConsumer {
+         private final Packet<?> packet;
++        // Canvas start - one event loop task per drain
++        private final @Nullable ChannelFutureListener listener;
++        private final boolean flush;
++        // Canvas end - one event loop task per drain
+ 
+         private PacketSendAction(final Packet<?> packet, @Nullable final ChannelFutureListener channelFutureListener, final boolean flush) {
+             super(connection -> connection.sendPacket(packet, channelFutureListener, flush));
+             this.packet = packet;
++            // Canvas start - one event loop task per drain
++            this.listener = channelFutureListener;
++            this.flush = flush;
++            // Canvas end - one event loop task per drain
+         }
+     }
+     // Paper end - Optimize network
