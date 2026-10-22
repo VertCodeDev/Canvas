@@ -13,7 +13,7 @@
          this.invertedVisibilityEntities.remove(entity.getUUID());
      }
  
-@@ -2175,8 +_,20 @@
+@@ -2179,8 +_,20 @@
  
      @Override
      public boolean canSee(org.bukkit.entity.Entity entity) {
