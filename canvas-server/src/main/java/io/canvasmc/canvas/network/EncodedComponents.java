@@ -3,8 +3,12 @@ package io.canvasmc.canvas.network;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.canvasmc.canvas.GlobalConfiguration;
+import io.papermc.paper.adventure.AdventureComponent;
+import io.papermc.paper.adventure.PaperAdventure;
+import java.time.Duration;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
+import net.kyori.adventure.text.TranslatableComponent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -22,6 +26,11 @@ import org.jspecify.annotations.Nullable;
  * came from a plugin are part of the key, since both change what is written. Switched with
  * {@code networking.cache-encoded-components} and {@code /canvas reload}; switching it off
  * drops everything kept.
+ * <p>
+ * A plugin component holding a translation key is translated for the player's language while it
+ * is encoded, through the server's translations, which a plugin may change while the server runs.
+ * Such a component is never cached while the server has translations of its own, so a changed
+ * translation shows at once; plain text and keys only the client translates are cached as before.
  */
 public final class EncodedComponents {
 
@@ -34,7 +43,15 @@ public final class EncodedComponents {
     private static final Cache<Key, byte[]> ENCODED = CacheBuilder.newBuilder()
         .maximumWeight(MAX_WEIGHT)
         .weigher((Key key, byte[] bytes) -> bytes.length * WEIGHT_PER_BYTE)
-        .expireAfterAccess(5L, TimeUnit.MINUTES)
+        .expireAfterAccess(Duration.ofMinutes(5L))
+        .concurrencyLevel(16)
+        .build();
+
+    // Whether a plugin component holds a translation key anywhere in it. Adventure components
+    // cannot change, so the answer is kept per instance, weakly and by identity.
+    private static final Cache<net.kyori.adventure.text.Component, Boolean> TRANSLATABLE = CacheBuilder.newBuilder()
+        .weakKeys()
+        .maximumSize(8192)
         .concurrencyLevel(16)
         .build();
 
@@ -64,6 +81,13 @@ public final class EncodedComponents {
                     return;
                 }
 
+                // Translated for the player while it is encoded: the server's translations decide
+                // the bytes, and they may change, so it is written fresh every time.
+                if (EncodedComponents.translatedOnEncode(value)) {
+                    codec.encode(output, value);
+                    return;
+                }
+
                 Key key = new Key(value, value.getClass(), output.adventure$locale, output.registryAccess());
                 byte[] bytes = ENCODED.getIfPresent(key);
                 if (bytes != null) {
@@ -81,6 +105,45 @@ public final class EncodedComponents {
                 }
             }
         };
+    }
+
+    /**
+     * @param value a component about to be encoded
+     * @return whether the server's own translations may change what it encodes to
+     */
+    static boolean translatedOnEncode(final Component value) {
+        if (!(value instanceof AdventureComponent wrapper)) {
+            return false;
+        }
+
+        net.kyori.adventure.text.Component adventure = wrapper.adventure$component();
+        Boolean known = TRANSLATABLE.getIfPresent(adventure);
+        if (known == null) {
+            known = EncodedComponents.holdsTranslatable(adventure);
+            TRANSLATABLE.put(adventure, known);
+        }
+
+        return known && PaperAdventure.hasAnyTranslations();
+    }
+
+    // Walks the component, its children and its hover text.
+    private static boolean holdsTranslatable(final net.kyori.adventure.text.Component component) {
+        if (component instanceof TranslatableComponent) {
+            return true;
+        }
+
+        HoverEvent<?> hover = component.style().hoverEvent();
+        if (hover != null && hover.value() instanceof net.kyori.adventure.text.Component text && EncodedComponents.holdsTranslatable(text)) {
+            return true;
+        }
+
+        for (net.kyori.adventure.text.Component child : component.children()) {
+            if (EncodedComponents.holdsTranslatable(child)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private record Key(Component component, Class<?> type, @Nullable Locale locale, RegistryAccess registries) {
