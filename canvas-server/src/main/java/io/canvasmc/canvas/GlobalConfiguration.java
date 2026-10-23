@@ -580,10 +580,19 @@ public class GlobalConfiguration extends Part {
                     "time the entity changes, and encoding the text is most of the cost of sending an item with lore.",
                     "The item itself is not changed, a player that picks it up gets it with its lore"
                 );
+
+            option("cacheEncodedComponents")
+                .docs(
+                    "Keeps the bytes every text component encodes to, so a name, lore line, sidebar line or menu item sent",
+                    "again is copied instead of turned into NBT and written again. Encoding text is most of what the network",
+                    "threads allocate. Holds at most 64 MB and forgets what was not sent for five minutes.",
+                    "Can be changed with \"/canvas reload\", switching it off empties the cache"
+                );
         }
 
         public boolean filterVelocityPacket = false;
         public boolean stripLoreFromEntityItems = false;
+        public boolean cacheEncodedComponents = false;
         public boolean consolidateFlushesOutsideReads = true;
         public boolean alternativePlayerListTick = false;
         public int playerInfoSendInterval = 600;

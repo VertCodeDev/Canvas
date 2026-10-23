@@ -112,7 +112,7 @@
              if (fullState != HOPPER_EMPTY) { // Paper - Perf: Optimize Hoppers
                  changed = ejectItems(level, pos, entity);
              }
-@@ -481,7 +_,47 @@
+@@ -500,7 +_,47 @@
          return slots;
      }
  
@@ -160,7 +160,7 @@
          int[] slots = getSlots(container, direction);
  
          for (int slot : slots) {
-@@ -551,8 +_,7 @@
+@@ -572,8 +_,7 @@
          ItemStack result = addItem(null, container, copy, null);
          if (result.isEmpty()) {
              changed = true;

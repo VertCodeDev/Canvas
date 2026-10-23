@@ -222,7 +222,7 @@
          if (level instanceof ServerLevel serverLevel) {
              RandomSource random = level.getRandom();
  
-@@ -5619,6 +_,7 @@
+@@ -5632,6 +_,7 @@
              return;
          }
  
@@ -230,7 +230,7 @@
          final List<Entity> indirectPassengers = (List<Entity>)this.getIndirectPassengers();
          final List<ChunkPos> positions = new java.util.ArrayList<>(indirectPassengers.size() + 1);
  
-@@ -5691,6 +_,19 @@
+@@ -5704,6 +_,19 @@
          );
      }
  
@@ -250,7 +250,7 @@
      // Folia & Canvas end - region threading
      public @Nullable Entity teleport(TeleportTransition transition) { // Paper - remove param final
          // Folia start - region threading
-@@ -5905,6 +_,7 @@
+@@ -5918,6 +_,7 @@
  
      public void placePortalTicket(final BlockPos ticketPosition) {
          if (this.level() instanceof ServerLevel serverLevel) {

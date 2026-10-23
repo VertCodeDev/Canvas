@@ -1,0 +1,55 @@
+--- a/net/minecraft/world/level/block/entity/SignBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/SignBlockEntity.java
+@@ -51,6 +_,11 @@
+     private SignText backText = SignText.EMPTY;
+     private boolean isWaxed = false;
+     private boolean allowOpFeatures = false;
++    // Canvas start - cache the sign update tag
++    // What the sign sends to players, kept until the sign changes: every chunk sent with the sign
++    // would encode its text again otherwise. It goes with the sign when its chunk unloads.
++    private @Nullable CompoundTag updateTag;
++    // Canvas end - cache the sign update tag
+ 
+     public SignBlockEntity(final BlockPos worldPosition, final BlockState blockState) {
+         this(BlockEntityTypes.SIGN, worldPosition, blockState);
+@@ -109,6 +_,7 @@
+     @Override
+     protected void loadAdditional(final ValueInput input) {
+         super.loadAdditional(input);
++        this.updateTag = null; // Canvas - cache the sign update tag
+         this.allowOpFeatures = input.getBooleanOr("allow_op_features", false);
+         this.frontText = input.read("front_text", SignText.CODEC).map(this::resolveLines).orElse(SignText.EMPTY);
+         this.backText = input.read("back_text", SignText.CODEC).map(this::resolveLines).orElse(SignText.EMPTY);
+@@ -325,8 +_,22 @@
+ 
+     @Override
+     public CompoundTag getUpdateTag(final HolderLookup.Provider registries) {
+-        return this.saveCustomOnly(registries);
+-    }
++        // Canvas start - cache the sign update tag, a copy each time since the caller may change it
++        if (this.updateTag == null) {
++            this.updateTag = this.saveCustomOnly(registries);
++        }
++
++        return this.updateTag.copy();
++        // Canvas end - cache the sign update tag
++    }
++
++    // Canvas start - cache the sign update tag
++    @Override
++    public void setChanged() {
++        this.updateTag = null;
++        super.setChanged();
++    }
++    // Canvas end - cache the sign update tag
+ 
+     public void setAllowedPlayerEditor(final @Nullable UUID playerUUID) {
+         this.playerWhoMayEdit = playerUUID;
+@@ -385,6 +_,7 @@
+     @Override
+     protected void applyImplicitComponents(final DataComponentGetter components) {
+         super.applyImplicitComponents(components);
++        this.updateTag = null; // Canvas - cache the sign update tag
+         this.frontText = components.getOrDefault(DataComponents.SIGN_TEXT_FRONT, SignText.EMPTY);
+         this.backText = components.getOrDefault(DataComponents.SIGN_TEXT_BACK, SignText.EMPTY);
+         this.isWaxed = components.get(DataComponents.WAXED) != null;

@@ -13,7 +13,7 @@
  
              while (this.running) {
                  final long tickStart = System.nanoTime(); // Paper - improve tick loop
-@@ -1783,10 +_,7 @@
+@@ -1785,10 +_,7 @@
      protected void tickChildren(final BooleanSupplier haveTime, final io.papermc.paper.threadedregions.TickRegions.TickRegionData region, final io.papermc.paper.threadedregions.RegionizedWorldData regionizedWorldData) {
          // this.getPlayerList().getPlayers().forEach(playerx -> playerx.connection.suspendFlushing());
          // this.server.getScheduler().mainThreadHeartbeat(); // CraftBukkit
@@ -34,7 +34,7 @@
  
          // this.updateEffectiveRespawnData(); // Canvas - region threading - moved to global region tick - we don't need every damn region calling this...
  
-@@ -1879,14 +_,7 @@
+@@ -1881,14 +_,7 @@
          } */
          // Folia & Canvas end - region threading
  

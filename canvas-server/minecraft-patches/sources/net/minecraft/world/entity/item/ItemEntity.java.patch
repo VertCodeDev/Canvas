@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/item/ItemEntity.java
 +++ b/net/minecraft/world/entity/item/ItemEntity.java
-@@ -39,6 +_,16 @@
+@@ -39,6 +_,23 @@
  
  public class ItemEntity extends Entity implements TraceableEntity {
      private static final EntityDataAccessor<ItemStack> DATA_ITEM = SynchedEntityData.defineId(ItemEntity.class, EntityDataSerializers.ITEM_STACK);
@@ -14,9 +14,49 @@
 +    private int stackLabelTick = Integer.MIN_VALUE;
 +    private long stackLabelShown;
 +    // Canvas end - ColorGens item stacking
++    // Canvas start - resting items
++    // Where the item settled on a block and what the blocks around it were then, NaN while it is not settled.
++    private double restX = Double.NaN;
++    private double restY = Double.NaN;
++    private double restZ = Double.NaN;
++    private int restPrint;
++    // Canvas end - resting items
      private static final float FLOAT_HEIGHT = 0.1F;
      public static final float EYE_HEIGHT = 0.2125F;
      private static final int LIFETIME = 6000;
+@@ -155,27 +_,29 @@
+             this.yo = this.getY();
+             this.zo = this.getZ();
+             Vec3 oldMovement = this.getDeltaMovement();
++            final boolean resting = this.canvas$resting(); // Canvas - resting items
+             if (this.isInWater() && this.getFluidHeight(FluidTags.WATER) > 0.1F) {
+                 this.setUnderwaterMovement();
+             } else if (this.isInLava() && this.getFluidHeight(FluidTags.LAVA) > 0.1F) {
+                 this.setUnderLavaMovement();
+-            } else {
++            } else if (!resting) { // Canvas - resting items, the block under it holds it anyway
+                 this.applyGravity();
+             }
+ 
+             if (this.level().isClientSide()) {
+                 this.noPhysics = false;
+-            } else {
++            } else if (!resting) { // Canvas - resting items, no block around it changed, so none it is stuck in
+                 this.noPhysics = !this.level().noCollision(this, this.getBoundingBox().deflate(1.0E-7));
+                 if (this.noPhysics) {
+                     this.moveTowardsClosestSpace(this.getX(), (this.getBoundingBox().minY + this.getBoundingBox().maxY) / 2.0, this.getZ());
+                 }
+             }
+ 
+-            if (this.onGround() && !(this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-5F) && (this.tickCount + this.getId()) % 4 != 0) { // Paper - Diff on change; ActivationRange immunity
++            if (this.onGround() && !(this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-5F) && (resting || (this.tickCount + this.getId()) % 4 != 0)) { // Paper - Diff on change; ActivationRange immunity // Canvas - resting items
+                 this.applyEffectsFromBlocksForLastMovements();
+             } else {
+                 this.move(MoverType.SELF, this.getDeltaMovement());
++                this.canvas$settle(); // Canvas - resting items
+                 this.applyEffectsFromBlocks();
+                 float airDrag = this.getAirDrag();
+                 float groundFriction = airDrag;
 @@ -199,11 +_,26 @@
              boolean moved = Mth.floor(this.xo) != Mth.floor(this.getX())
                  || Mth.floor(this.yo) != Mth.floor(this.getY())
@@ -45,6 +85,79 @@
              if (this.age != -32768) {
                  this.age++;
              }
+@@ -228,6 +_,72 @@
+         }
+     }
+ 
++    // Canvas start - resting items
++    /**
++     * Remember where the item settled after a move, when it came to lie on a block, so the ticks
++     * after can tell it is still lying there.
++     */
++    private void canvas$settle() {
++        if (!this.level().isClientSide() && this.level().canvasConfig().entities.itemEntities.skipPhysicsForRestingItems
++            && this.onGround() && this.mainSupportingBlockPos.isPresent() && !this.isInWater() && !this.isInLava()) {
++            this.restX = this.getX();
++            this.restY = this.getY();
++            this.restZ = this.getZ();
++            this.restPrint = this.canvas$restPrint();
++        } else {
++            this.restX = Double.NaN;
++        }
++    }
++
++    /**
++     * An item still lying where it settled, not pushed or thrown, with every block it touches the
++     * same as then, cannot move: moving it, checking it is not stuck in a block and pulling it
++     * down would change nothing. Flowing water, a block placed or broken next to it, a piston, a
++     * push or a teleport all change what is compared, and the item moves as before.
++     */
++    private boolean canvas$resting() {
++        if (Double.isNaN(this.restX)) {
++            return false;
++        }
++
++        Vec3 movement = this.getDeltaMovement();
++        if (!this.level().canvasConfig().entities.itemEntities.skipPhysicsForRestingItems
++            || !this.onGround() || this.noPhysics || movement.y > 0.0D || movement.horizontalDistanceSqr() > 1.0E-5F
++            || this.getX() != this.restX || this.getY() != this.restY || this.getZ() != this.restZ
++            || this.isInWater() || this.isInLava() || this.canvas$restPrint() != this.restPrint) {
++            this.restX = Double.NaN;
++            return false;
++        }
++
++        return true;
++    }
++
++    /**
++     * @return a print of every block the item is in or lies on, which changes when any of them does
++     */
++    private int canvas$restPrint() {
++        net.minecraft.world.phys.AABB box = this.getBoundingBox();
++        int minX = Mth.floor(box.minX);
++        int maxX = Mth.floor(box.maxX);
++        int minY = Mth.floor(box.minY - 1.0E-6D);
++        int maxY = Mth.floor(box.maxY);
++        int minZ = Mth.floor(box.minZ);
++        int maxZ = Mth.floor(box.maxZ);
++        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
++        Level level = this.level();
++        int print = 1;
++        for (int x = minX; x <= maxX; x++) {
++            for (int y = minY; y <= maxY; y++) {
++                for (int z = minZ; z <= maxZ; z++) {
++                    print = 31 * print + System.identityHashCode(level.getBlockState(pos.set(x, y, z)));
++                }
++            }
++        }
++
++        return print;
++    }
++    // Canvas end - resting items
++
+     @Override
+     public BlockPos getBlockPosBelowThatAffectsMyMovement() {
+         return this.getOnPos(0.999999F);
 @@ -261,7 +_,7 @@
                      }
                      // Paper end - Fix items merging through walls
