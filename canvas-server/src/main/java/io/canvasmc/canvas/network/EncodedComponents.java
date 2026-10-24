@@ -7,6 +7,7 @@ import io.papermc.paper.adventure.AdventureComponent;
 import io.papermc.paper.adventure.PaperAdventure;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.Objects;
 import net.kyori.adventure.text.TranslatableComponent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.minecraft.core.RegistryAccess;
@@ -55,6 +56,16 @@ public final class EncodedComponents {
         .concurrencyLevel(16)
         .build();
 
+    // The hash of a plugin component, kept per instance, weakly and by identity. Hashing the
+    // wrapper turns the whole component into a vanilla one first, every time; the component it
+    // wraps cannot change, so its hash is worked out once, and one sent to many players is
+    // hashed once for all of them.
+    private static final Cache<net.kyori.adventure.text.Component, Integer> HASHES = CacheBuilder.newBuilder()
+        .weakKeys()
+        .maximumSize(16384)
+        .concurrencyLevel(16)
+        .build();
+
     private EncodedComponents() {
     }
 
@@ -88,7 +99,7 @@ public final class EncodedComponents {
                     return;
                 }
 
-                Key key = new Key(value, value.getClass(), output.adventure$locale, output.registryAccess());
+                Key key = EncodedComponents.key(value, output.adventure$locale, output.registryAccess());
                 byte[] bytes = ENCODED.getIfPresent(key);
                 if (bytes != null) {
                     output.writeBytes(bytes);
@@ -146,6 +157,49 @@ public final class EncodedComponents {
         return false;
     }
 
-    private record Key(Component component, Class<?> type, @Nullable Locale locale, RegistryAccess registries) {
+    /**
+     * A plugin component is keyed by the component it wraps, which compares and hashes without
+     * being converted; a vanilla one by itself, since it may still be changed and its hash is
+     * not safe to keep.
+     *
+     * @param value a component about to be encoded
+     * @param locale the language of the player it goes to
+     * @param registries the registries it is encoded with
+     * @return the key its bytes are kept under
+     */
+    static Key key(final Component value, final @Nullable Locale locale, final RegistryAccess registries) {
+        if (!(value instanceof AdventureComponent wrapper)) {
+            return new Key(value, value.getClass(), locale, registries, value.hashCode());
+        }
+
+        net.kyori.adventure.text.Component adventure = wrapper.adventure$component();
+        Integer hash = HASHES.getIfPresent(adventure);
+        if (hash == null) {
+            hash = adventure.hashCode();
+            HASHES.put(adventure, hash);
+        }
+
+        return new Key(adventure, value.getClass(), locale, registries, hash);
+    }
+
+    record Key(Object component, Class<?> type, @Nullable Locale locale, RegistryAccess registries, int hash) {
+
+        @Override
+        public int hashCode() {
+            int result = this.hash;
+            result = 31 * result + this.type.hashCode();
+            result = 31 * result + Objects.hashCode(this.locale);
+            return 31 * result + System.identityHashCode(this.registries);
+        }
+
+        @Override
+        public boolean equals(final Object other) {
+            return other instanceof Key key
+                && this.hash == key.hash
+                && this.type == key.type
+                && this.registries == key.registries
+                && Objects.equals(this.locale, key.locale)
+                && this.component.equals(key.component);
+        }
     }
 }
