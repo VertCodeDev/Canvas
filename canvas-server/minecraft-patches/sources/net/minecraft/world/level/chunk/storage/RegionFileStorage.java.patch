@@ -1,0 +1,102 @@
+--- a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
++++ b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
+@@ -63,9 +_,56 @@
+ 
+     @Override
+     public final boolean moonrise$doesRegionFileNotExistNoIO(final int chunkX, final int chunkZ) {
++        // ColorGens start - cold regions
++        if (io.canvasmc.canvas.region.ColdRegions.isEngaged() && io.canvasmc.canvas.region.ColdRegions.isHeld(this.folder.resolve(getRegionFileName(chunkX, chunkZ)))) {
++            // a held file is about to be archived or fetched back, it may well exist
++            return false;
++        }
++        // ColorGens end - cold regions
+         return !this.doesRegionFilePossiblyExist(ChunkPos.pack(chunkX >> REGION_SHIFT, chunkZ >> REGION_SHIFT));
+     }
+ 
++    // ColorGens start - cold regions
++    private volatile @Nullable String coldWorld;
++
++    public final void canvas$setColdWorld(final String worldName) {
++        this.coldWorld = worldName;
++    }
++
++    public final Path canvas$regionPath(final int regionX, final int regionZ) {
++        return this.folder.resolve("r." + regionX + "." + regionZ + ANVIL_EXTENSION).toAbsolutePath().normalize();
++    }
++
++    public final void canvas$forgetMissing(final int regionX, final int regionZ) {
++        synchronized (this.nonExistingRegionFiles) {
++            this.nonExistingRegionFiles.remove(ChunkPos.pack(regionX, regionZ));
++        }
++    }
++
++    public final void canvas$forgetAllMissing() {
++        synchronized (this.nonExistingRegionFiles) {
++            this.nonExistingRegionFiles.clear();
++        }
++    }
++
++    // flushes and closes the cached file of the region, the caller holds it so nothing reopens it
++    public synchronized final void canvas$closeRegionFile(final int regionX, final int regionZ) throws IOException {
++        final long key = ChunkPos.pack(regionX, regionZ);
++        this.canvas$forgetMissing(regionX, regionZ);
++
++        final Optional<RegionFile> cached = this.regionCache.remove(key);
++        if (cached == null || cached.isEmpty()) {
++            return;
++        }
++
++        try {
++            cached.get().flush();
++        } finally {
++            cached.get().close();
++        }
++    }
++    // ColorGens end - cold regions
++
+     @Override
+     public synchronized final RegionFile moonrise$getRegionFileIfLoaded(final int chunkX, final int chunkZ) {
+         final Optional<RegionFile> ret = this.regionCache.getAndMoveToFirst(ChunkPos.pack(chunkX >> REGION_SHIFT, chunkZ >> REGION_SHIFT));
+@@ -228,6 +_,11 @@
+ 
+     private @Nullable RegionFile getRegionFile(final ChunkPos pos, final boolean create) throws IOException {
+         // Paper start - rewrite chunk system
++        // ColorGens start - cold regions
++        io.canvasmc.canvas.region.ColdRegions.Open coldOpen = null;
++        for (;;) {
++        coldGate:
++        // ColorGens end - cold regions
+         synchronized (this) {
+             final long key = ChunkPos.pack(pos.x() >> REGION_SHIFT, pos.z() >> REGION_SHIFT);
+ 
+@@ -248,6 +_,19 @@
+ 
+             final Path regionPath = this.folder.resolve(getRegionFileName(pos.x(), pos.z()));
+ 
++            // ColorGens start - cold regions
++            if (io.canvasmc.canvas.region.ColdRegions.isEngaged()) {
++                if (coldOpen == null) {
++                    coldOpen = new io.canvasmc.canvas.region.ColdRegions.Open(this.coldWorld);
++                }
++
++                if (coldOpen.mustWait(regionPath)) {
++                    // held or archived: wait or fetch outside the lock, then look again
++                    break coldGate;
++                }
++            }
++            // ColorGens end - cold regions
++
+             if (!create && !Files.isRegularFile(regionPath)) {
+                 // unlike vanilla, do not cache Optional.empty() here: missing regions are tracked in
+                 // nonExistingRegionFiles so that a read miss cannot evict a live RegionFile from the cache
+@@ -274,6 +_,10 @@
+ 
+             return ret;
+         }
++        // ColorGens start - cold regions
++        coldOpen.resolve();
++        }
++        // ColorGens end - cold regions
+         // Paper end - rewrite chunk system
+     }
+ 

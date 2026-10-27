@@ -1,7 +1,10 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
-@@ -709,6 +_,13 @@
+@@ -707,8 +_,16 @@
+         this.poiDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.PoiDataController((ServerLevel)(Object)this, this.chunkTaskScheduler);
+         this.chunkDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.ChunkDataController((ServerLevel)(Object)this, this.chunkTaskScheduler);
          // Paper end - rewrite chunk system
++        io.canvasmc.canvas.region.ColdRegions.bind((ServerLevel)(Object)this, this.bukkitName); // ColorGens - cold regions
          this.getCraftServer().addWorld(this.getWorld()); // CraftBukkit
          this.updateTickData(); // Folia - region threading - make sure it is initialised before ticked
 +        // Canvas start - per world distance
