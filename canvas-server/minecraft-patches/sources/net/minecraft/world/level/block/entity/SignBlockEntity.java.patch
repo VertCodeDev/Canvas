@@ -3,7 +3,7 @@
 @@ -51,6 +_,11 @@
      private SignText backText = SignText.EMPTY;
      private boolean isWaxed = false;
-     private boolean allowOpFeatures = false;
+     public boolean allowOpFeatures = false;
 +    // Canvas start - cache the sign update tag
 +    // What the sign sends to players, kept until the sign changes: every chunk sent with the sign
 +    // would encode its text again otherwise. It goes with the sign when its chunk unloads.

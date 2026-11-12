@@ -592,10 +592,10 @@ index dbc107ea52cd1db899b991ee3bad5e72c2776b1a..12cfd9eebba1f6d9d9f8cb9cec1cc0c5
          for (String extraComment : extraComments) {
              builder.append("// ");
 diff --git a/net/minecraft/commands/Commands.java b/net/minecraft/commands/Commands.java
-index d9acbf61ecd3d2800402880dd5d4d92239b01223..b5a1e7d539136ec198fa0dbad70279c41a89a77e 100644
+index 891a4d2ce29a3954c10ad1a091ef8247a6b7a7cc..51b015498b136cdafb925a3ce78672a9cf5a1952 100644
 --- a/net/minecraft/commands/Commands.java
 +++ b/net/minecraft/commands/Commands.java
-@@ -306,6 +306,7 @@ public class Commands {
+@@ -312,6 +312,7 @@ public class Commands {
              WhitelistCommand.register(this.dispatcher);
          }
  
@@ -629,7 +629,7 @@ index 023cca49c6dd0f2961cf30f02c7cd74601f73f8b..f4b9f486547569bc208b0163da10ecf3
          }
          // Paper end - Improve ServerGUI
 diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
-index c14996f1d8a9ed77a845a464c1789bab0715741b..4aab0c37e2685bd91fba09ad24631569c97844da 100644
+index ab49bb83b51a3ac210f4c51ec48c11036912149e..449aa0b11c71245b461587576a6240b5d567841d 100644
 --- a/net/minecraft/world/level/Level.java
 +++ b/net/minecraft/world/level/Level.java
 @@ -169,6 +169,17 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl

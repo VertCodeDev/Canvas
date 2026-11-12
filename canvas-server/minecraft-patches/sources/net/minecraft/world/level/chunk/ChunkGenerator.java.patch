@@ -17,7 +17,7 @@
                  boolean foundSomething = false;
  
                  for (Entry<StructurePlacement, Set<Holder<Structure>>> entry : randomSpreadEntries) {
-@@ -555,23 +_,50 @@
+@@ -646,23 +_,50 @@
          final Level level, final StructureManager structureManager, final MobCategory mobCategory, final BlockPos pos
      ) {
          Map<Structure, LongSet> structures = structureManager.getAllStructuresAt(pos);

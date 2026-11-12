@@ -1,6 +1,6 @@
 --- a/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
 +++ b/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
-@@ -1991,6 +_,15 @@
+@@ -2005,6 +_,15 @@
                      final int minYIterate = currChunkY == minChunkY ? (minBlockY & 15) + sectionAdjust : 0;
                      final int maxYIterate = currChunkY == maxChunkY ? (maxBlockY & 15) - sectionAdjust : 15;
  
@@ -16,7 +16,7 @@
                      for (int currY = minYIterate; currY <= maxYIterate; ++currY) {
                          final int blockY = currY | (currChunkY << 4);
                          for (int currZ = minZIterate; currZ <= maxZIterate; ++currZ) {
-@@ -2006,7 +_,7 @@
+@@ -2020,7 +_,7 @@
                                      continue;
                                  }
  

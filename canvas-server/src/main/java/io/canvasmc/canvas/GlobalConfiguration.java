@@ -575,10 +575,9 @@ public class GlobalConfiguration extends Part {
 
             option("stripLoreFromEntityItems")
                 .docs(
-                    "Leaves the lore out of items that are sent as part of an entity: dropped items, item displays, item",
-                    "frames and thrown items. No entity shows the lore of its item, but each viewer is sent it, again every",
-                    "time the entity changes, and encoding the text is most of the cost of sending an item with lore.",
-                    "The item itself is not changed, a player that picks it up gets it with its lore"
+                    "Doesn't send the lore of items shown by entities, like dropped items, item frames and item displays.",
+                    "No entity renders it, and encoding lore text is most of the cost of sending such an item. The item",
+                    "itself keeps its lore"
                 );
 
             option("cacheEncodedComponents")

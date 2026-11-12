@@ -54,7 +54,7 @@ index eae782750b6a2c1aa66074553faf0de8ea62cb59..da1a4ed81561a9978a7d19a384c2d066
          final List<Entity> passengers = entity.getPassengers();
          final List<String> passengerStrings = new ArrayList<>(passengers.size());
 diff --git a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
-index aae6b1ca2f3060efd3bb7877d07a7a0bd211acbe..16423eb50db99faa8b0d43d857291c41df6347eb 100644
+index aae6b1ca2f3060efd3bb7877d07a7a0bd211acbe..741d5a6c5fe0b2b9a917db16b2f642b0aac6dcb5 100644
 --- a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
 +++ b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
 @@ -1,5 +1,11 @@
@@ -110,8 +110,8 @@ index aae6b1ca2f3060efd3bb7877d07a7a0bd211acbe..16423eb50db99faa8b0d43d857291c41
 +        final java.text.DecimalFormat format = TWO_DECIMALS.get();
 +
 +        return "(" + format.format(vec.x) + "," + format.format(vec.y) + "," + format.format(vec.z) + ")";
-+    }
-+
+     }
+ 
 +    private static String dumpEntityWithoutReferences(final Entity entity) {
 +        if (entity == null) {
 +            return "{null}";
@@ -148,8 +148,8 @@ index aae6b1ca2f3060efd3bb7877d07a7a0bd211acbe..16423eb50db99faa8b0d43d857291c41
 +        }
 +
 +        return base + "}";
-     }
- 
++    }
++
 +    public static String getEntityContext(final Entity entity) {
 +        final java.util.List<Entity> passengers = entity.getPassengers();
 +        final java.util.List<String> passengerStrings = new java.util.ArrayList<>(passengers.size());
@@ -265,7 +265,7 @@ index aae6b1ca2f3060efd3bb7877d07a7a0bd211acbe..16423eb50db99faa8b0d43d857291c41
              throw new IllegalStateException(ex);
          }
      }
-@@ -123,50 +240,188 @@ public class TickThread extends Thread {
+@@ -123,50 +240,192 @@ public class TickThread extends Thread {
      }
  
      public static boolean isShutdownThread() {
@@ -346,6 +346,10 @@ index aae6b1ca2f3060efd3bb7877d07a7a0bd211acbe..16423eb50db99faa8b0d43d857291c41
 +            Math.max(fromChunkX, toChunkX) + buffer,
 +            Math.max(fromChunkZ, toChunkZ) + buffer
 +        );
++    }
++
++    public static boolean isTickThreadFor(final Level world, final int fromChunkX, final int fromChunkZ, final int toChunkX, final int toChunkZ, final int buffer) {
++        return isTickThreadFor(world, fromChunkX - buffer, fromChunkZ - buffer, toChunkX + buffer, toChunkZ + buffer);
      }
  
      public static boolean isTickThreadFor(final Level world, final int fromChunkX, final int fromChunkZ, final int toChunkX, final int toChunkZ) {
@@ -451,7 +455,7 @@ index aae6b1ca2f3060efd3bb7877d07a7a0bd211acbe..16423eb50db99faa8b0d43d857291c41
 +            return false;
 +        }
 +
-+        final RegionizedWorldData worldData = region.getData().world.worldRegionData.get(); // Canvas - optimize thread check
++        final RegionizedWorldData worldData = ((TickRegionScheduler.TickThreadRunner) thread).currentTickingWorldRegionizedData; // Canvas - optimize thread check
 +
 +        // pass through the check if the entity is removed and we own its chunk
 +        if (worldData.hasEntity(entity)) {
@@ -467,7 +471,7 @@ index aae6b1ca2f3060efd3bb7877d07a7a0bd211acbe..16423eb50db99faa8b0d43d857291c41
      }
  }
 diff --git a/src/main/java/com/destroystokyo/paper/entity/ai/MobGoalHelper.java b/src/main/java/com/destroystokyo/paper/entity/ai/MobGoalHelper.java
-index 845e86b6141332f5a690687357c4b37831e876f6..0936af2492608c52e9210b1b04d02776aa541265 100644
+index 0388d663152458feaddf2fb8cf19b8bf64f3ad74..d9770e5fdc86768c43d38a81a1b7a66bb12eb830 100644
 --- a/src/main/java/com/destroystokyo/paper/entity/ai/MobGoalHelper.java
 +++ b/src/main/java/com/destroystokyo/paper/entity/ai/MobGoalHelper.java
 @@ -22,7 +22,7 @@ import org.bukkit.entity.*;
@@ -480,10 +484,10 @@ index 845e86b6141332f5a690687357c4b37831e876f6..0936af2492608c52e9210b1b04d02776
          //<editor-fold defaultstate="collapsed" desc="bukkitMap Entities">
          // Start generate - MobGoalHelper#BUKKIT_BRIDGE
 diff --git a/src/main/java/com/destroystokyo/paper/entity/ai/PaperMobGoals.java b/src/main/java/com/destroystokyo/paper/entity/ai/PaperMobGoals.java
-index 83f698af85812117c453fdfb0fda27abde816eb3..90a91985f7d2207cc2656c2e2eb18a1032deab57 100644
+index c1629a36b38d5300551f266f6470cd29fb064eaf..d991478fc51cb17d44f7881c08fbd391d23ba1cf 100644
 --- a/src/main/java/com/destroystokyo/paper/entity/ai/PaperMobGoals.java
 +++ b/src/main/java/com/destroystokyo/paper/entity/ai/PaperMobGoals.java
-@@ -18,6 +18,7 @@ public class PaperMobGoals implements MobGoals {
+@@ -19,6 +19,7 @@ public class PaperMobGoals implements MobGoals {
      @Override
      public <T extends Mob> void addGoal(T mob, int priority, Goal<T> goal) {
          CraftMob craftMob = (CraftMob) mob;
@@ -491,7 +495,7 @@ index 83f698af85812117c453fdfb0fda27abde816eb3..90a91985f7d2207cc2656c2e2eb18a10
          net.minecraft.world.entity.ai.goal.Goal mojangGoal;
  
          if (goal instanceof PaperGoal<?> paperGoal) {
-@@ -32,6 +33,7 @@ public class PaperMobGoals implements MobGoals {
+@@ -33,6 +34,7 @@ public class PaperMobGoals implements MobGoals {
      @Override
      public <T extends Mob> void removeGoal(T mob, Goal<T> goal) {
          CraftMob craftMob = (CraftMob) mob;
@@ -499,15 +503,15 @@ index 83f698af85812117c453fdfb0fda27abde816eb3..90a91985f7d2207cc2656c2e2eb18a10
          if (goal instanceof PaperCustomGoal) {
              getHandle(craftMob, goal.getTypes()).removeGoal((net.minecraft.world.entity.ai.goal.Goal) goal);
          } else if (goal instanceof PaperGoal) {
-@@ -117,6 +119,7 @@ public class PaperMobGoals implements MobGoals {
+@@ -118,6 +120,7 @@ public class PaperMobGoals implements MobGoals {
      @Override
      public <T extends Mob> Collection<Goal<T>> getAllGoals(T mob, GoalType type) {
          CraftMob craftMob = (CraftMob) mob;
 +        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(craftMob.getHandle(), "Cannot get all goals async"); // Canvas - region threading
          Set<Goal<T>> goals = new HashSet<>();
          for (WrappedGoal item : getHandle(craftMob, type).getAvailableGoals()) {
-             if (!item.getGoal().hasFlag(MobGoalHelper.paperToVanilla(type))) {
-@@ -136,6 +139,7 @@ public class PaperMobGoals implements MobGoals {
+             final net.minecraft.world.entity.ai.goal.Goal goal = item.getGoal();
+@@ -138,6 +141,7 @@ public class PaperMobGoals implements MobGoals {
      @Override
      public <T extends Mob> Collection<Goal<T>> getAllGoalsWithout(T mob, GoalType type) {
          CraftMob craftMob = (CraftMob) mob;
@@ -515,7 +519,7 @@ index 83f698af85812117c453fdfb0fda27abde816eb3..90a91985f7d2207cc2656c2e2eb18a10
          Set<Goal<T>> goals = new HashSet<>();
          for (GoalType internalType : GoalType.values()) {
              if (internalType == type) {
-@@ -169,6 +173,7 @@ public class PaperMobGoals implements MobGoals {
+@@ -172,6 +176,7 @@ public class PaperMobGoals implements MobGoals {
      @Override
      public <T extends Mob> Collection<Goal<T>> getRunningGoals(T mob, GoalType type) {
          CraftMob craftMob = (CraftMob) mob;
@@ -523,7 +527,7 @@ index 83f698af85812117c453fdfb0fda27abde816eb3..90a91985f7d2207cc2656c2e2eb18a10
          Set<Goal<T>> goals = new HashSet<>();
          getHandle(craftMob, type).getAvailableGoals()
              .stream().filter(WrappedGoal::isRunning)
-@@ -187,6 +192,7 @@ public class PaperMobGoals implements MobGoals {
+@@ -191,6 +196,7 @@ public class PaperMobGoals implements MobGoals {
      @Override
      public <T extends Mob> Collection<Goal<T>> getRunningGoalsWithout(T mob, GoalType type) {
          CraftMob craftMob = (CraftMob) mob;
@@ -762,10 +766,10 @@ index bd68139ae635f2ad7ec8e7a21e0056a139c4c62e..48a43341b17247355a531164019d5cc9
      }
  
 diff --git a/src/main/java/io/papermc/paper/configuration/GlobalConfiguration.java b/src/main/java/io/papermc/paper/configuration/GlobalConfiguration.java
-index 0b35a293f3436bcf8a39c4f07a88340cd9d33bcb..b4e32d7dec60898c0cedbc8542bbffbc3a0c1314 100644
+index 014f8488af19ba4c95365d6867784e76406c9165..d8462fdb17248267720bbc2437007c975bee23e4 100644
 --- a/src/main/java/io/papermc/paper/configuration/GlobalConfiguration.java
 +++ b/src/main/java/io/papermc/paper/configuration/GlobalConfiguration.java
-@@ -392,4 +392,20 @@ public class GlobalConfiguration extends ConfigurationPart {
+@@ -395,4 +395,20 @@ public class GlobalConfiguration extends ConfigurationPart {
      public class UpdateChecker extends ConfigurationPart {
          public boolean enabled = true;
      }
@@ -787,10 +791,10 @@ index 0b35a293f3436bcf8a39c4f07a88340cd9d33bcb..b4e32d7dec60898c0cedbc8542bbffbc
 +    // Folia & Canvas end - threaded regions
  }
 diff --git a/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java b/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
-index c710819bcd422f062a10127090ecfa6b222fe4f7..bad0f7b4dd6594c1ee016a24d32902faf939d279 100644
+index f5005cc53cf0b9f85006e403302d3610ee1cadc8..512a88939287f5cf8b3d6dea5eb7ab21c16c77cc 100644
 --- a/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
 +++ b/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
-@@ -530,6 +530,7 @@ public class WorldConfiguration extends ConfigurationPart {
+@@ -533,6 +533,7 @@ public class WorldConfiguration extends ConfigurationPart {
  
          @PostProcess
          private void postProcess() {
@@ -1370,7 +1374,7 @@ index 21d8be83ab0a57941a9f7cc175900de50c6f1363..1c0ff62016b6d70567cf99cb76d6e269
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 7a0274388d4e59803b8cf776ac9f352e9010640b..4a5eb5cd53d36e632cf30883ceaefe434ac2a9e1 100644
+index 7a0274388d4e59803b8cf776ac9f352e9010640b..258189883a6ed56932ef32ebf35eeda7f3a43486 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -289,7 +289,7 @@ public final class CraftServer implements Server {
@@ -1666,7 +1670,7 @@ index 7a0274388d4e59803b8cf776ac9f352e9010640b..4a5eb5cd53d36e632cf30883ceaefe43
      }
  
      @Override
-@@ -2972,4 +3169,142 @@ public final class CraftServer implements Server {
+@@ -2972,4 +3169,160 @@ public final class CraftServer implements Server {
      public void allowPausing(final Plugin plugin, final boolean value) {
          this.console.addPluginAllowingSleep(plugin.getName(), value);
      }
@@ -1806,6 +1810,24 @@ index 7a0274388d4e59803b8cf776ac9f352e9010640b..4a5eb5cd53d36e632cf30883ceaefe43
 +    @Override
 +    public io.canvasmc.canvas.region.RegionThreadingTickManager getRegionThreadingTickRateManager() {
 +        return io.canvasmc.canvas.threadedregions.ServerRegionTickManager.API_INSTANCE;
++    }
++
++    @Override
++    public io.canvasmc.canvas.ServerShutdownHandler getServerShutdownHandler() {
++        if (!io.papermc.paper.threadedregions.RegionShutdownThread.isShuttingDown()) {
++            return null;
++        }
++
++        final Thread current = Thread.currentThread();
++        if (
++            current instanceof io.papermc.paper.threadedregions.RegionShutdownThread regionShutdownThread
++            && !(regionShutdownThread instanceof io.canvasmc.canvas.threadedregions.world.WorldShutdownThread)
++        ) {
++            return regionShutdownThread.shutdownHandler;
++        }
++
++        // not on shutdown thread
++        return null;
 +    }
 +    // Canvas end - region threading
  }
@@ -3212,10 +3234,10 @@ index 000c5ea5d39d5ab6e5592012ab1cc7ee547505dc..ab2ee478c53923be85f5a6d4971bed5b
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743d0353904 100644
+index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..b2401c5bae7e5efdbad6935aae7286249543db2f 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-@@ -122,6 +122,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -124,6 +124,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          return this.apiScheduler;
      };
      // Paper end - Folia schedulers
@@ -3227,7 +3249,7 @@ index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743
  
      public CraftEntity(final CraftServer server, final Entity entity) {
          this.server = server;
-@@ -156,6 +161,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -158,6 +163,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
      }
  
      public Entity getHandle() {
@@ -3235,7 +3257,7 @@ index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743
          return this.entity;
      }
  
-@@ -318,6 +324,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -320,6 +326,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
      }
  
      protected boolean teleport0(Location location, TeleportCause cause, TeleportFlag... flags) {
@@ -3247,7 +3269,7 @@ index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743
          Entity entity = this.getHandle();
          if (!entity.isAlive() || !entity.valid) {
              return false;
-@@ -784,7 +795,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -786,7 +797,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          ImmutableSet.Builder<Player> players = ImmutableSet.builder();
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3256,7 +3278,7 @@ index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743
  
          if (entityTracker != null) {
              for (ServerPlayerConnection connection : entityTracker.seenBy) {
-@@ -801,7 +812,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -803,7 +814,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          Preconditions.checkArgument(player != null, "Player cannot be null");
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3265,7 +3287,7 @@ index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743
          if (entityTracker == null) return false;
  
          return entityTracker.seenBy.contains(((CraftPlayer) player).getHandle().connection);
-@@ -1137,7 +1148,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1149,7 +1160,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          }
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3274,7 +3296,7 @@ index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743
  
          if (entityTracker == null) {
              return;
-@@ -1154,7 +1165,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1166,7 +1177,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          }
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3283,7 +3305,7 @@ index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743
  
          if (entityTracker == null) {
              return;
-@@ -1190,27 +1201,81 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1202,27 +1213,81 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          location.checkFinite();
          Location locationClone = location.clone(); // clone so we don't need to worry about mutations after this call.
  
@@ -3383,7 +3405,7 @@ index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743
      // Paper end - more teleport API / async chunk API
  
      private final org.bukkit.entity.Entity.Spigot spigot = new org.bukkit.entity.Entity.Spigot() {
-@@ -1282,8 +1347,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1294,8 +1359,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public Set<org.bukkit.entity.Player> getTrackedPlayers() {
@@ -3393,7 +3415,7 @@ index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743
          if (tracker == null) {
              return java.util.Collections.emptySet();
          }
-@@ -1404,10 +1468,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1416,10 +1480,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
      }
  
      public boolean considersEntityAsAlly0(final @NotNull org.bukkit.entity.Entity entity) {
@@ -3406,7 +3428,7 @@ index 58fdb79adf624bc5a575e1ec296a9bd18c3d1801..7e6d5a46baaa0895983d59b476591743
      }
  
      @Override
-@@ -1418,27 +1484,35 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1430,27 +1496,35 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public @NotNull Map<Key, Predicate<org.bukkit.entity.Entity>> getAdditionalAlliedRules() {
@@ -3833,7 +3855,7 @@ index 32e426513f3e710abeda3363a4e2a08fe902c703..2655d6c0c58c27bd532d13fab723863c
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
-index e708c17dda72a6e13b57403871a8db6f6109c186..582c13383c82c9cb0aa17d23d6ab24b516f46c0c 100644
+index 119959cd00560577038c582349bdf039ca7ae4bb..d077806fa23895d804593f056bc24a6e1219db48 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
 @@ -116,6 +116,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
@@ -5237,10 +5259,10 @@ index 6ad86ba7abac537b42f8bb43bbb8d984cbbdf052..f6880ff590fdd3e30562a24de00c6a21
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
-index fc04dc08b263a67dc1e363e87f9fce8ede3ed754..aa25e4f179ec4589d9aa0f652dba084f5636d740 100644
+index 286b11640f739eecf29adac7b9e98fa7b783f424..8960e4f1b672547287895c7cf6ecedd81d9ace2c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
 +++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
-@@ -937,7 +937,7 @@ public class CraftEventFactory {
+@@ -941,7 +941,7 @@ public class CraftEventFactory {
          return false;
      }
  
@@ -5249,7 +5271,7 @@ index fc04dc08b263a67dc1e363e87f9fce8ede3ed754..aa25e4f179ec4589d9aa0f652dba084f
  
      public static boolean handleBlockSpreadEvent(LevelAccessor level, BlockPos source, BlockPos target, net.minecraft.world.level.block.state.BlockState state, @net.minecraft.world.level.block.Block.UpdateFlags int flags) {
          return handleBlockSpreadEvent(level, source, target, state, flags, false);
-@@ -953,7 +953,7 @@ public class CraftEventFactory {
+@@ -957,7 +957,7 @@ public class CraftEventFactory {
          CraftBlockState snapshot = CraftBlockStates.getBlockState(level, target);
          snapshot.setBlock(state);
  
@@ -5258,7 +5280,7 @@ index fc04dc08b263a67dc1e363e87f9fce8ede3ed754..aa25e4f179ec4589d9aa0f652dba084f
          if (event.callEvent()) {
              boolean result = snapshot.place(flags);
              return !checkSetResult || result;
-@@ -2402,7 +2402,7 @@ public class CraftEventFactory {
+@@ -2412,7 +2412,7 @@ public class CraftEventFactory {
  
      }
  
@@ -5267,7 +5289,7 @@ index fc04dc08b263a67dc1e363e87f9fce8ede3ed754..aa25e4f179ec4589d9aa0f652dba084f
  
      public static boolean callBlockLockCheckEvent(
          BlockEntity blockEntity,
-@@ -2422,7 +2422,7 @@ public class CraftEventFactory {
+@@ -2432,7 +2432,7 @@ public class CraftEventFactory {
              if (event.getResult() == org.bukkit.event.Event.Result.ALLOW) {
                  return true;
              } else if (event.getResult() == org.bukkit.event.Event.Result.DENY || !code.canUnlock(player, event.isUsingCustomKeyItemStack() ? org.bukkit.craftbukkit.inventory.CraftItemStack.asNMSCopy(event.getKeyItem()) : player.getMainHandItem())) {
@@ -5276,7 +5298,7 @@ index fc04dc08b263a67dc1e363e87f9fce8ede3ed754..aa25e4f179ec4589d9aa0f652dba084f
                  return false;
              }
          }
-@@ -2430,9 +2430,11 @@ public class CraftEventFactory {
+@@ -2440,9 +2440,11 @@ public class CraftEventFactory {
      }
  
      public static boolean sendChestLockedNotifications(Vec3 pos) {
